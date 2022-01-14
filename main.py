@@ -180,6 +180,8 @@ def train(model, x_train, y_train, lengths_train, x_test, y_test, lengths_test, 
 
 def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, target_accuracy, cutoff_epochs, batch_sz):
     from math import ceil
+    from random import sample
+
     model.to("cuda")
 
     batches = len(x_train)
@@ -195,18 +197,27 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
     percent_correct = 0
     early_stop_counter = 0
 
+    indices = range(batches)
     for i in range(cutoff_epochs):
+        batch = torch.stack(sample(indices, batch_sz)).type(torch.long)
         for param in model.parameters():
             param.grad = None
-        for indx1, indx2 in zip(indxs, indxs[1:]):
-            mask = mask_train[indx1:indx2]
-            x = x_train[indx1:indx2].to("cuda")
-            y = y_train[indx1:indx2].to("cuda")
-            y_hat = model(x)
-            loss = bernoulli_loss_cont(y, y_hat, mask)
-            loss.backward()
-
-            del mask, x, y
+        x = x_train[batch]
+        y = y_train[batch]
+        mask = mask_train[batch]
+        y_hat = model(x)
+        loss = bernoulli_loss_cont(y, y_hat, mask)
+        loss.backward()
+        del mask, x, y
+        # for indx1, indx2 in zip(indxs, indxs[1:]):
+        #     mask = mask_train[indx1:indx2]
+        #     x = x_train[indx1:indx2].to("cuda")
+        #     y = y_train[indx1:indx2].to("cuda")
+        #     y_hat = model(x)
+        #     loss = bernoulli_loss_cont(y, y_hat, mask)
+        #     loss.backward()
+        #
+        #     del mask, x, y
         op.step()
 
         with torch.no_grad():
@@ -219,7 +230,7 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
             early_stop_counter += 1
             if early_stop_counter > 4:
                 model = torch.load("best_net_cache.pt")
-                print("Best loss was: %s, Accuracy: %s, and %s" % (best_loss.item(), percent_correct.item(), random_love_note()))
+                print("Best loss was: %s, Accuracy: %s" % (best_loss.item(), percent_correct.item()))
                 return model, best_loss, percent_correct
         else:
             best_loss = loss_test
@@ -228,7 +239,7 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
             torch.save(model,"best_net_cache.pt")
         print("Accuracy: %s, counter: %d" % (percent_correct.item(), early_stop_counter))
         if percent_correct > target_accuracy: break
-    print("Best loss was: %s, Accuracy: %s, and %s" % (best_loss.item(), percent_correct.item(), random_love_note()))
+    print("Best loss was: %s, Accuracy: %s" % (best_loss.item(), percent_correct.item()))
     return model, best_loss, percent_correct
 
 
