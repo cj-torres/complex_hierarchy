@@ -202,9 +202,9 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
         batch = torch.tensor(sample(indices, batch_sz)).type(torch.LongTensor)
         for param in model.parameters():
             param.grad = None
-        x = x_train[batch]
-        y = y_train[batch]
-        mask = mask_train[batch]
+        x = x_train[batch].to("cuda")
+        y = y_train[batch].to("cuda")
+        mask = mask_train[batch].to("cuda")
         y_hat = model(x)
         loss = bernoulli_loss_cont(y, y_hat, mask)
         loss.backward()
