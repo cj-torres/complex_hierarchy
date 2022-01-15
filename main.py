@@ -199,7 +199,7 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
 
     indices = range(batches)
     for i in range(cutoff_epochs):
-        batch = torch.stack(sample(indices, batch_sz)).type(torch.LongTensor)
+        batch = torch.tensor(sample(indices, batch_sz)).type(torch.LongTensor)
         for param in model.parameters():
             param.grad = None
         x = x_train[batch]
