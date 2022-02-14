@@ -8,6 +8,7 @@ from random import shuffle
 from random import sample
 import torch
 
+
 def random_love_note():
     love_strings = ["I love you",
                     "I miss you Nina",
@@ -21,7 +22,6 @@ def random_love_note():
                     "XO"
                     ]
     return sample(love_strings,1)[0]
-
 
 
 class SimpleClassifier(torch.nn.Module):
@@ -43,7 +43,7 @@ class SimpleClassifier(torch.nn.Module):
     def init_weights(self):
         for p in self.parameters():
             if p.data.ndimension() >= 2:
-                torch.nn.init.xavier_uniform_(p.data)
+                torch.nn.init.normal_(p.data)
             else:
                 torch.nn.init.zeros_(p.data)
 
@@ -80,7 +80,7 @@ class LSTMBranchSequencer(torch.nn.Module):
     def init_weights(self):
         for p in self.parameters():
             if p.data.ndimension() >= 2:
-                torch.nn.init.xavier_uniform_(p.data)
+                torch.nn.init.normal_(p.data)
             else:
                 torch.nn.init.zeros_(p.data)
 
@@ -114,7 +114,7 @@ class LSTMCLassifier(torch.nn.Module):
     def init_weights(self):
         for p in self.parameters():
             if p.data.ndimension() >= 2:
-                torch.nn.init.xavier_uniform_(p.data)
+                torch.nn.init.normal_(p.data)
             else:
                 torch.nn.init.zeros_(p.data)
 
