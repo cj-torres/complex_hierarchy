@@ -14,10 +14,10 @@ if __name__ == '__main__':
                 model, best_loss, percent_correct = seq_train(model, x1, y1, lengths1, x_t, y_t, lengths_t, target, 500, 256)
                 weights = model_to_list(model)
                 writer.writerow(weights)
-                accuracy.append([best_loss.item(), percent_correct.item()])
+                accuracy.append([best_loss.item(), percent_correct.item(), target])
     with open('dyck1_model_c_lstm_loss_seq1.csv', 'w', newline='') as accuracy_file:
         writer = csv.writer(accuracy_file)
-        writer.writerow(["r", "accuracy"])
+        writer.writerow(["r", "accuracy", "target"])
         writer.writerows([[a] for a in accuracy])
 
     x, y, mask = lb.make_anbn_io_cont(1000)
@@ -32,8 +32,8 @@ if __name__ == '__main__':
                 model, best_loss, percent_correct = seq_train(model, x1, y1, lengths1, x_t, y_t, lengths_t, target, 500, 256)
                 weights = model_to_list(model)
                 writer.writerow(weights)
-                accuracy.append([best_loss.item(), percent_correct.item()])
+                accuracy.append([best_loss.item(), percent_correct.item(), target])
     with open('anbn_model_c_lstm_loss_seq1.csv', 'w', newline='') as accuracy_file:
         writer = csv.writer(accuracy_file)
-        writer.writerow(["r", "accuracy"])
+        writer.writerow(["r", "accuracy", "target"])
         writer.writerows([[a] for a in accuracy])
