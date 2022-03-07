@@ -192,13 +192,15 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
 
     x_test = x_test.to("cuda")
     y_test = y_test.to("cuda")
-    op = torch.optim.Adam(model.parameters())
+    op = torch.optim.Adam(model.parameters(), lr=.0005)
     best_loss = torch.tensor([float('inf')]).squeeze()
     percent_correct = 0
     early_stop_counter = 0
 
     indices = range(batches)
-    for i in range(cutoff_epochs):
+    train_percent_correct = 0
+    while percent_correct < target_accuracy:
+        #for i in range(cutoff_epochs):
         batch = torch.tensor(sample(indices, batch_sz)).type(torch.LongTensor)
         for param in model.parameters():
             param.grad = None
@@ -208,6 +210,7 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
         y_hat = model(x)
         loss = bernoulli_loss_cont(y, y_hat, mask)
         loss.backward()
+        train_percent_correct = correct_guesses(y, y_hat, mask)
         del mask, x, y
         # for indx1, indx2 in zip(indxs, indxs[1:]):
         #     mask = mask_train[indx1:indx2]
@@ -228,18 +231,20 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
 
         if loss_test >= best_loss:
             early_stop_counter += 1
-            if early_stop_counter > 4:
+            if early_stop_counter > 100:
                 model = torch.load("best_net_cache.pt")
-                print("Best loss was: %s, Accuracy: %s" % (best_loss.item(), percent_correct.item()))
+                print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
+                      (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
                 return model, best_loss, percent_correct
         else:
             best_loss = loss_test
             early_stop_counter = 0
             percent_correct = test_percent_correct
             torch.save(model,"best_net_cache.pt")
-        print("Accuracy: %s, counter: %d" % (percent_correct.item(), early_stop_counter))
-        if percent_correct > target_accuracy: break
-    print("Best loss was: %s, Accuracy: %s" % (best_loss.item(), percent_correct.item()))
+        print("Accuracy: %s, counter: %d, train accuracy: %s" %
+              (percent_correct.item(), early_stop_counter, train_percent_correct.item()))
+    print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
+          (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
     return model, best_loss, percent_correct
 
 
