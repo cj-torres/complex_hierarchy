@@ -7,7 +7,7 @@ if __name__ == '__main__':
     with open('abn_model_c_lstm_seq1_rand.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         for target in target_accuracies:
-            for i in range(1500):
+            for i in range(2500):
                 print("Model %d" % (i+1))
                 model = LSTMBranchSequencer(4, 2, 4, 4, 3)
                 (x1, y1, lengths1), (x_t, y_t, lengths_t) = random_split(x, y, mask)
@@ -25,7 +25,7 @@ if __name__ == '__main__':
     with open('anbm_model_c_lstm_seq1_rand.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         for target in target_accuracies:
-            for i in range(1500):
+            for i in range(2500):
                 print("Model %d" % (i+1))
                 model = LSTMBranchSequencer(4, 2, 4, 4, 3)
                 (x1, y1, lengths1), (x_t, y_t, lengths_t) = random_split(x, y, mask)
