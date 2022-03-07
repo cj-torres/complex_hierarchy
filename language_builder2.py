@@ -301,7 +301,7 @@ def gen_abn_words_redundant(N, p):
 
 
 def make_abn_continuation(w):
-    n = (len(w)-1)/2
+    n = (len(w)-1)//2
     cont = [[1, 1, 0], [1, 0, 1]] * n + [[1, 1, 0]]
     return cont
 
