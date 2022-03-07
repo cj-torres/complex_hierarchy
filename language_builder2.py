@@ -271,7 +271,7 @@ def make_anbm_continuation(w):
     length = len(w)-1
     n = len(w.replace("b", ""))-1
     m = length - n
-    cont = [[1, 1, 1]] * n + [[1, 0, 1]] * m
+    cont = [[1, 1, 1]]+[[1, 1, 1]] * n + [[1, 0, 1]] * m
     return cont
 
 
