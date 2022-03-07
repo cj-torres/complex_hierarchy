@@ -1,7 +1,7 @@
 from classifiers import *
 
 if __name__ == '__main__':
-    target_accuracies = [1]
+    target_accuracies = [.5, .55, .6, .65,.7, .75, .8, .85, .9, .95]
     x, y, mask = lb.make_abn_io_cont_redundant(1000, .1)
     accuracy =  []
     with open('abn_model_c_lstm_seq1_rand.csv', 'w', newline='') as csvfile:
