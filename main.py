@@ -1,4 +1,10 @@
 from classifiers import *
+import random
+random.seed(12345)
+import torch
+torch.manual_seed(12345)
+import numpy as np
+np.random.seed(12345)
 
 if __name__ == '__main__':
     target_accuracies = [.5, .55, .6, .65,.7, .75, .8, .85, .9, .95]
