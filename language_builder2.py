@@ -291,7 +291,7 @@ def make_anbm_io_cont_redundant(N, p):
     return x, y, mask
 
 
-#(ab)n
+# (ab)n
 def gen_abn_words_redundant(N, p):
     abn = []
     for i in range(N):
@@ -302,7 +302,7 @@ def gen_abn_words_redundant(N, p):
 
 def make_abn_continuation(w):
     n = (len(w)-1)//2
-    cont = [[1, 1, 0], [1, 0, 1]] * n + [[1, 1, 0]]
+    cont = [[1, 1, 0], [0, 0, 1]] * n + [[1, 1, 0]]
     return cont
 
 
@@ -321,6 +321,74 @@ def make_abn_io_cont_redundant(N, p):
 
     return x, y, mask
 
+
+# anbnan
+def gen_anbnan_words_redundant(N, p):
+    anbnan = []
+    for i in range(N):
+        n = geometric(p)
+        anbnan.append("S"+"a"*n+"b"*n+"a"*n)
+    return anbnan
+
+
+def make_anbnan_continuation(w):
+    n = (len(w)-1)//3
+    cont = [[1, 1, 0]]+ [[0, 1, 1]] * n + [[0, 0, 1]] * (n-1) + [[0,1,0]]*n + [[1,0,0]]*(n!=0)
+    return cont
+
+
+def make_anbnan_io_cont_redundant(N, p):
+    anbnan = gen_abn_words_redundant(N, p)
+    x = []
+    y = []
+    mask = []
+    for word in anbnan:
+        x.append(torch.Tensor(list(map(dict_map, word))))
+        y.append(torch.Tensor(make_anbnan_continuation(word)))
+        mask.append(torch.ones(len(word)))
+    x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True).type(torch.IntTensor)
+    y = torch.nn.utils.rnn.pad_sequence(y, batch_first=True).type(torch.IntTensor)
+    mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True).type(torch.BoolTensor)
+
+    return x, y, mask
+
+
+# double dyck
+def make_double_abplus_redundant(N, p):
+    double_abplus = []
+    for i in range(N):
+        n = geometric(p)
+        double_abplus.append("S" + ''.join(random.choice(["a","b"]) for _ in range(n))*2)
+    return double_abplus
+
+
+def make_double_abplus_continuation(w):
+    cont = []
+    for i, c in enumerate(w):
+        if i % 2 == 0:
+            if w[1:i//2+1] == w[i//2+1:i+1]:
+                cont.append([1, 1, 1])
+            else:
+                cont.append([0, 1, 1])
+        else:
+            cont.append([0, 1, 1])
+    return cont
+
+
+def make_double_abplus_io_cont_redundant(N, p):
+    double_abplus = make_double_abplus_redundant(N, p)
+    x = []
+    y = []
+    mask = []
+    for word in double_abplus:
+        x.append(torch.Tensor(list(map(dict_map, word))))
+        y.append(torch.Tensor(make_double_abplus_continuation(word)))
+        mask.append(torch.ones(len(word)))
+    x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True).type(torch.IntTensor)
+    y = torch.nn.utils.rnn.pad_sequence(y, batch_first=True).type(torch.IntTensor)
+    mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True).type(torch.BoolTensor)
+
+    return x, y, mask
 
 #Dyck-2
 def dyck2_transition(s):
