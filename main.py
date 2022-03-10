@@ -7,7 +7,7 @@ import numpy as np
 np.random.seed(12345)
 
 if __name__ == '__main__':
-    target_accuracies = [.5, .55, .6, .65,.7, .75, .8, .85, .9, .95]
+    target_accuracies = [i/1000 for i in range(500,1000,25)]
     x, y, mask = lb.make_abn_io_cont_redundant(1000, .1)
     accuracy =  []
     with open('abn_model_c_lstm_seq1_rand.csv', 'w', newline='') as csvfile:
