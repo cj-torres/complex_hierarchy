@@ -69,21 +69,10 @@ def gen_dyck1(max_length):
     return "S"+a
 
 
-def gen_dyck1_words(N, max_length):
-    dyck1 = set()
-    while len(dyck1) < N+1:
-        dyck1.add(gen_dyck1(max_length))
-        print(len(dyck1))
-    dyck1.remove("S")
-    return dyck1
-
-
 def gen_dyck1_words_redundant(N, max_length):
     dyck1 = []
     while len(dyck1) < N+1:
         dyck1.append(gen_dyck1(max_length))
-        #print(len(dyck1))
-    #dyck1.remove("S")
     return dyck1
 
 
@@ -99,59 +88,9 @@ def make_dyck1_continuation(w):
     return cont
 
 
-def gen_rand_words_not_dyck1(N):
-    rand_words = set()
-    while len(rand_words) < N:
-        n = random.randint(2,50)
-        w = ""
-        for i in range(n):
-            x = random.randint(0,1)
-            w = w + "a"*x + "b"*(1-x)
-        if not dyck_1_checker(w):
-            rand_words.add(w)
-        #print(len(rand_words))
-    return rand_words
-
-
-def make_dyck1_io(N):
-    dyck1 = gen_dyck1_words(N)
-    not_dyck1 = gen_rand_words_not_dyck1(N)
-    x = []
-    y = []
-    length = []
-    for word in dyck1:
-        x.append(torch.Tensor(list(map(dict_map, word))))
-        y.append(1)
-        length.append(len(word) - 1)
-    for word in not_dyck1:
-        x.append(torch.Tensor(list(map(dict_map, word))))
-        y.append(0)
-        length.append(len(word) - 1)
-    x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True).type(torch.IntTensor)
-    y = torch.FloatTensor(y)
-    length = torch.LongTensor(length)
-
-    return x, y, length
-
-
-def make_dyck1_io_cont(N):
-    dyck1 = gen_dyck1_words(N)
-    x = []
-    y = []
-    mask = []
-    for word in dyck1:
-        x.append(torch.Tensor(list(map(dict_map, word))))
-        y.append(torch.Tensor(make_dyck1_continuation(word)))
-        mask.append(torch.ones(len(word)))
-    x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True).type(torch.IntTensor)
-    y = torch.nn.utils.rnn.pad_sequence(y, batch_first=True).type(torch.IntTensor)
-    mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True).type(torch.BoolTensor)
-
-    return x, y, mask
-
-
 def make_dyck1_io_cont_redundant(N, max_length):
     dyck1 = gen_dyck1_words_redundant(N, max_length)
+    dyck1.sort(key=len)
     x = []
     y = []
     mask = []
@@ -167,33 +106,12 @@ def make_dyck1_io_cont_redundant(N, max_length):
 
 
 #anbn
-def gen_anbn_words(N):
-    anbn = set()
-    for i in range(N):
-        anbn.add("S"+"a"*(i+1) + "b"*(i+1))
-    return anbn
-
-
 def gen_anbn_words_redundant(N, p):
     anbn = []
     for i in range(N):
         n = geometric(p)
         anbn.append("S"+"a"*n+"b"*n)
     return anbn
-
-
-def gen_rand_words_not_anbn(N):
-    rand_words = set()
-    while len(rand_words) < N:
-        n = random.randint(2, 2*N)
-        w = ""
-        for i in range(n):
-            x = random.randint(0,1)
-            w = w + "a"*x + "b"*(1-x)
-        if not anbn_checker(w):
-            rand_words.add(w)
-        #print(len(rand_words))
-    return rand_words
 
 
 def make_anbn_continuation(w):
@@ -204,45 +122,9 @@ def make_anbn_continuation(w):
     return cont
 
 
-def make_anbn_io(N):
-    anbn = gen_anbn_words(N)
-    not_anbn = gen_rand_words_not_anbn(N)
-    x = []
-    y = []
-    length = []
-    for word in anbn:
-        x.append(torch.Tensor(list(map(dict_map, word))))
-        y.append(1)
-        length.append(len(word) - 1)
-    for word in not_anbn:
-        x.append(torch.Tensor(list(map(dict_map, word))))
-        y.append(0)
-        length.append(len(word) - 1)
-    x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True).type(torch.IntTensor)
-    y = torch.FloatTensor(y)
-    length = torch.LongTensor(length)
-
-    return x, y, length
-
-
-def make_anbn_io_cont(N):
-    anbn = gen_anbn_words(N)
-    x = []
-    y = []
-    mask = []
-    for word in anbn:
-        x.append(torch.Tensor(list(map(dict_map, word))))
-        y.append(torch.Tensor(make_anbn_continuation(word)))
-        mask.append(torch.ones(len(word)))
-    x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True).type(torch.IntTensor)
-    y = torch.nn.utils.rnn.pad_sequence(y, batch_first=True).type(torch.IntTensor)
-    mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True).type(torch.BoolTensor)
-
-    return x, y, mask
-
-
 def make_anbn_io_cont_redundant(N, p):
     anbn = gen_anbn_words_redundant(N, p)
+    anbn.sort(key=len)
     x = []
     y = []
     mask = []
@@ -277,6 +159,7 @@ def make_anbm_continuation(w):
 
 def make_anbm_io_cont_redundant(N, p):
     anbm = gen_anbm_words_redundant(N, p)
+    anbm.sort(key=len)
     x = []
     y = []
     mask = []
@@ -308,6 +191,7 @@ def make_abn_continuation(w):
 
 def make_abn_io_cont_redundant(N, p):
     abn = gen_abn_words_redundant(N, p)
+    abn.sort(key=len)
     x = []
     y = []
     mask = []
@@ -338,7 +222,8 @@ def make_anbnan_continuation(w):
 
 
 def make_anbnan_io_cont_redundant(N, p):
-    anbnan = gen_abn_words_redundant(N, p)
+    anbnan = gen_anbnan_words_redundant(N, p)
+    anbnan.sort(key=len)
     x = []
     y = []
     mask = []
@@ -377,6 +262,7 @@ def make_double_abplus_continuation(w):
 
 def make_double_abplus_io_cont_redundant(N, p):
     double_abplus = make_double_abplus_redundant(N, p)
+    double_abplus.sort(key=len)
     x = []
     y = []
     mask = []

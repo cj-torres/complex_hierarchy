@@ -79,10 +79,7 @@ class LSTMBranchSequencer(torch.nn.Module):
 
     def init_weights(self):
         for p in self.parameters():
-            if p.data.ndimension() >= 2:
-                torch.nn.init.normal_(p.data)
-            else:
-                torch.nn.init.zeros_(p.data)
+            torch.nn.init.normal_(p.data)
 
     def forward(self, x):
         embeds = self.embedding(x)
@@ -136,7 +133,7 @@ def bernoulli_loss(y, y_hat):
 
 
 def bernoulli_loss_cont(y, y_hat, mask):
-    return -(torch.xlogy(y[mask], y_hat[mask]) + torch.xlogy(1-y[mask], 1-y_hat[mask])).mean(dim=0).sum(dim=-1)
+    return -(torch.xlogy(y[mask], y_hat[mask]) + torch.xlogy(1-y[mask], 1-y_hat[mask])).sum(dim=1).mean(dim=0)
 
 
 def correct_guesses(y, y_hat, mask):
@@ -178,7 +175,7 @@ def train(model, x_train, y_train, lengths_train, x_test, y_test, lengths_test, 
     return model, best_loss
 
 
-def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, target_accuracy, cutoff_epochs, batch_sz):
+def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, target_loss, cutoff_epochs, batch_sz):
     from math import ceil
     from random import sample
 
@@ -192,15 +189,15 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
 
     x_test = x_test.to("cuda")
     y_test = y_test.to("cuda")
-    op = torch.optim.Adam(model.parameters(), lr=.0005)
+    op = torch.optim.Adam(model.parameters(), lr=.0005, weight_decay=1e-7)
     best_loss = torch.tensor([float('inf')]).squeeze()
+    loss_test = torch.tensor([float('inf')]).squeeze()
     percent_correct = 0
     early_stop_counter = 0
 
     indices = range(batches)
     train_percent_correct = 0
-    while percent_correct < target_accuracy:
-        #for i in range(cutoff_epochs):
+    while loss_test > target_loss:
         batch = torch.tensor(sample(indices, batch_sz)).type(torch.LongTensor)
         for param in model.parameters():
             param.grad = None
@@ -212,15 +209,7 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
         loss.backward()
         train_percent_correct = correct_guesses(y, y_hat, mask)
         del mask, x, y
-        # for indx1, indx2 in zip(indxs, indxs[1:]):
-        #     mask = mask_train[indx1:indx2]
-        #     x = x_train[indx1:indx2].to("cuda")
-        #     y = y_train[indx1:indx2].to("cuda")
-        #     y_hat = model(x)
-        #     loss = bernoulli_loss_cont(y, y_hat, mask)
-        #     loss.backward()
-        #
-        #     del mask, x, y
+
         op.step()
 
         with torch.no_grad():
@@ -232,7 +221,7 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
         if loss_test >= best_loss:
             early_stop_counter += 1
             if early_stop_counter > 100:
-                model = torch.load("best_net_cache.pt")
+                model.load_state_dict(torch.load("best_net_cache.ptr"))
                 print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
                       (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
                 return model, best_loss, percent_correct
@@ -240,12 +229,25 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
             best_loss = loss_test
             early_stop_counter = 0
             percent_correct = test_percent_correct
-            torch.save(model,"best_net_cache.pt")
-        print("Accuracy: %s, counter: %d, train accuracy: %s" %
-              (percent_correct.item(), early_stop_counter, train_percent_correct.item()))
+            torch.save(model.state_dict(), "best_net_cache.ptr")
+        print("Accuracy: %s, loss: %s, counter: %d, train accuracy: %s" %
+              (percent_correct.item(), loss_test.item(), early_stop_counter, train_percent_correct.item()))
     print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
           (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
     return model, best_loss, percent_correct
+
+
+def random_split_no_overfit(x, y, length, r=.85):
+    # should work, as all sets should be sorted
+    cut = int(len(x)*r)
+    x_train = x[:cut]
+    x_test = x[cut:]
+    y_train = y[:cut]
+    y_test = y[cut:]
+    length_train = length[:cut]
+    length_test = length[cut:]
+
+    return (x_train, y_train, length_train), (x_test, y_test, length_test)
 
 
 def random_split(x, y, length, r=.8):
