@@ -1,71 +1,99 @@
+rm(list=ls())
 library(tidyverse)
+
+bias_vectors = c("V105","V106","V107","V108","V109","V110","V111","V112","V113","V114","V115","V116","V117","V118","V119","V120","V121","V122","V123","V124","V125","V126","V127","V128","V129","V130","V131","V132","V133","V134","V135","V136","V153","V154","V155","V156","V169","V170","V171")
 
 get_kld_growth = function(weights, accuracy_table, weight_interval_sequence, accuracy_sequence){
   accuracy_groupings = accuracy_table %>%mutate(acc_group=cut(accuracy,accuracy_sequence,ordered_result=TRUE))
-  dataframe = merge(weights, accuracy_groupings, by = 'row.names')%>% gather("parameter","weight",weight_names)
-  percentages_df = dataframe %>% mutate(interval = cut(weight,weight_interval_sequence,ordered_result=TRUE)) %>% drop_na(interval, acc_group)%>% select(interval, acc_group) %>% group_by(acc_group, interval) %>% summarize(n=n()) %>% group_by(acc_group) %>% mutate(percentage = n/sum(n))%>%ungroup()
-  entropy_df = percentages_df %>% mutate(log_p = log(percentage)) %>% mutate(point_entropy = -percentage*log_p)
-  cross_entropy_df = entropy_df %>% group_by(interval)%>%mutate(point_crosswise = -percentage*lag(log_p,order_by=acc_group))%>%ungroup()%>%replace(is.na(.),0)
+  weight_names = colnames(weights)
+  #matrices = weights %>% select(!bias_vectors)
+  #biases = weights %>% select(bias_vectors)
+  #matrices_labeled = matrices %>% mutate(ID = row_number())
+  #biases_labeled = biases %>% mutate(ID = row_number())
+  weights_labeled = weights %>% mutate(ID = row_number())
+
+  dataframe = merge(weights_labeled, accuracy_groupings, by = 'row.names')%>% gather("parameter","weight",colnames(weights)) %>% mutate(interval = cut(weight,weight_interval_sequence,ordered_result=TRUE)) %>% drop_na(interval, acc_group)%>%
+    separate(interval, c("lower.bound", "upper.bound"), sep=",",remove=FALSE) %>% mutate(lower.bound = as.numeric(substr(lower.bound, 2, nchar(lower.bound))))%>% mutate(upper.bound = as.numeric(substr(upper.bound, 1, nchar(upper.bound)-1)))%>% mutate(log_q = log(pnorm(upper.bound)-pnorm(lower.bound)))
+  percentages_df_accuracy = dataframe  %>% group_by(acc_group, interval) %>% summarise(n=n()) %>% group_by(acc_group) %>% mutate(p_acc = n/sum(n))
+  percentages_df_model = dataframe  %>% group_by(ID, interval) %>% summarise(n=n()) %>% group_by(ID) %>% mutate(p_model= n/sum(n))
+  percentages_df = inner_join(dataframe,percentages_df_accuracy %>% select(!c(n)))
+  percentages_df = inner_join(percentages_df,percentages_df_model %>% select(!c(n)))
+  log_p_df = percentages_df %>% mutate(log_p = log(p_acc)) %>% mutate(log_p_model = log(p_model)) #%>% mutate(point_entropy = -percentage*log_p)
+  model_wise_kld = log_p_df %>% group_by(ID, acc_group)  %>%summarize(model_kld=sum(p_model*(log_p_model-log_q)))
+  accuracy_wise_kld = log_p_df %>% group_by(acc_group)  %>%summarize(model_cross_entropy=sum(p_acc*(log_p-log_q)))
+  #cross_entropy_df = entropy_df %>% group_by(interval)%>%mutate(point_crosswise = -percentage*lag(log_p,order_by=acc_group))%>%ungroup()%>%replace(is.na(.),0)
+  # select(interval, ID) %>% 
+  #kld_df= cross_entropy_df %>% group_by(acc_group) %>% summarize(kld = sum(point_crosswise-point_entropy))
   
-  kld_df= cross_entropy_df %>% group_by(acc_group) %>% summarize(kld = sum(point_crosswise-point_entropy))
-  
-  return(kld_df)
+  return(list(dataframe, model_wise_kld, accuracy_wise_kld))
 }
 
 
-get_kld_growth_w_ci = function(weights, accuracy_table, weight_interval_sequence, accuracy_sequence, batches){
+get_kld_growth_loss = function(weights, accuracy_table, weight_interval_sequence, accuracy_sequence){
+  accuracy_groupings = accuracy_table %>%mutate(acc_group=cut(best_loss,accuracy_sequence,ordered_result=TRUE))
+  weight_names = colnames(weights)
+  matrices = weights %>% select(!bias_vectors)
+  biases = weights %>% select(bias_vectors)
+  matrices_labeled = matrices %>% mutate(ID = row_number())
+  biases_labeled = biases %>% mutate(ID = row_number())
+  weights_labeled = weights %>% mutate(ID = row_number())
   
-  accuracy_groupings = accuracy_table %>%mutate(acc_group=cut(accuracy,accuracy_sequence,ordered_result=TRUE))
-  dataframe = merge(weights, accuracy_groupings, by = 'row.names')%>% gather("parameter","weight",weight_names)%>% drop_na(acc_group)
+  dataframe = merge(weights_labeled, accuracy_groupings, by = 'row.names')%>% gather("parameter","weight",colnames(weights)) %>% mutate(interval = cut(weight,weight_interval_sequence,ordered_result=TRUE)) %>% drop_na(interval, acc_group)%>%
+    separate(interval, c("lower.bound", "upper.bound"), sep=",",remove=FALSE) %>% mutate(lower.bound = as.numeric(substr(lower.bound, 2, nchar(lower.bound))))%>% mutate(upper.bound = as.numeric(substr(upper.bound, 1, nchar(upper.bound)-1)))%>% mutate(log_q = log(pnorm(upper.bound)-pnorm(lower.bound)))
+  percentages_df_accuracy = dataframe  %>% group_by(acc_group, interval) %>% summarise(n=n()) %>% group_by(acc_group) %>% mutate(p_acc = n/sum(n))
+  percentages_df_model = dataframe  %>% group_by(ID, interval) %>% summarise(n=n()) %>% group_by(ID) %>% mutate(p_model= n/sum(n))
+  percentages_df = inner_join(dataframe,percentages_df_accuracy %>% select(!c(n)))
+  percentages_df = inner_join(percentages_df,percentages_df_model %>% select(!c(n)))
+  log_p_df = percentages_df %>% mutate(log_p = log(p_acc)) %>% mutate(log_p_model = log(p_model)) #%>% mutate(point_entropy = -percentage*log_p)
+  model_wise_kld = log_p_df %>% group_by(ID, interval)%>%summarize_all(mean)%>%group_by(ID)  %>%summarize(model_kld=sum(p_model*(log_p_model-log_q)))
+  accuracy_wise_kld = log_p_df %>% group_by(acc_group)%>%summarize_all(mean)%>%group_by(acc_group)   %>%summarize(model_cross_entropy=sum(p_acc*(log_p-log_q)))
+  #cross_entropy_df = entropy_df %>% group_by(interval)%>%mutate(point_crosswise = -percentage*lag(log_p,order_by=acc_group))%>%ungroup()%>%replace(is.na(.),0)
+  # select(interval, ID) %>% 
+  #kld_df= cross_entropy_df %>% group_by(acc_group) %>% summarize(kld = sum(point_crosswise-point_entropy))
   
-  groups = group_split(dataframe, acc_group)
-  
-  kld_df = data.frame(matrix(ncol = 2, nrow = 0))
-  colnames(kld_df) = c('acc_group', 'kld') 
-  for (i in seq_along(groups[1:length(groups)-1])){
-    for (j in 1:batches){
-      pres_acc_group = groups[[i+1]][1,]$acc_group
-      n_i = nrow(groups[[i+1]])
-      n_prev = nrow(groups[[i]])
-      present_group = groups[[i+1]][sample(n_i,size=n_i,replace=TRUE),]
-      prev_group = groups[[i]] #[sample(n_prev,size=n_prev,replace=TRUE),]
-      sampled = rbind(present_group, prev_group)
-      percentages_df = sampled %>% mutate(interval = cut(weight,weight_interval_sequence,ordered_result=TRUE)) %>% drop_na(interval, acc_group)%>% select(interval, acc_group) %>% group_by(acc_group, interval) %>% summarize(n=n()) %>% group_by(acc_group) %>% mutate(percentage = n/sum(n))%>%ungroup()
-      entropy_df = percentages_df %>% mutate(log_p = log(percentage)) %>% mutate(point_entropy = -percentage*log_p)
-      cross_entropy_df = entropy_df %>% group_by(interval)%>%mutate(point_crosswise = -percentage*lag(log_p,order_by=acc_group))%>%ungroup()%>%replace(is.na(.),0)
-      kld = cross_entropy_df %>% filter(acc_group == pres_acc_group) %>% group_by(acc_group) %>% summarize(kld = sum(point_crosswise-point_entropy))
-      kld_df = rbind(kld_df, kld)
-    }
-    print(paste(pres_acc_group, " finished"))
-  }
-  
-  
-  return(kld_df)
+  return(list(percentages_df, model_wise_kld, accuracy_wise_kld))
 }
 
-anbn_weights = read.csv("C:\\Users\\Charlie\\PycharmProjects\\complex_hierarchy\\anbn_model_c_lstm_seq1_rand.csv", header=FALSE)
-dyck_weights = read.csv("C:\\Users\\Charlie\\PycharmProjects\\complex_hierarchy\\dyck1_model_c_lstm_seq1_rand.csv", header=FALSE)
-anbn_acc = read.csv("C:\\Users\\Charlie\\PycharmProjects\\complex_hierarchy\\anbn_model_c_lstm_loss_seq1_rand.csv", header=TRUE)
-dyck_acc = read.csv("C:\\Users\\Charlie\\PycharmProjects\\complex_hierarchy\\dyck1_model_c_lstm_loss_seq1_rand.csv", header=TRUE)
-abn_weights = read.csv("C:\\Users\\Charlie\\PycharmProjects\\complex_hierarchy\\abn_model_c_lstm_seq1_rand.csv", header=FALSE)
-anbm_weights = read.csv("C:\\Users\\Charlie\\PycharmProjects\\complex_hierarchy\\anbm_model_c_lstm_seq1_rand.csv", header=FALSE)
-abn_acc = read.csv("C:\\Users\\Charlie\\PycharmProjects\\complex_hierarchy\\abn_model_c_lstm_loss_seq1_rand.csv", header=TRUE)
-anbm_acc = read.csv("C:\\Users\\Charlie\\PycharmProjects\\complex_hierarchy\\anbm_model_c_lstm_loss_seq1_rand.csv", header=TRUE)
+
+
+anbn_weights = read.csv("~/complex_hierarchy/anbn_model_c_lstm_seq1_rand2.csv", header=FALSE)
+dyck_weights = read.csv("~/complex_hierarchy/dyck1_model_c_lstm_seq1_rand2.csv", header=FALSE)
+anbn_acc = read.csv("~/complex_hierarchy/anbn_model_c_lstm_loss_seq1_rand2.csv", header=TRUE)%>% mutate(language = "anbn")
+dyck_acc = read.csv("~/complex_hierarchy/dyck1_model_c_lstm_loss_seq1_rand2.csv", header=TRUE)%>% mutate(language = "dyck")
+abn_weights = read.csv("~/complex_hierarchy/abn_model_c_lstm_seq1_rand2.csv", header=FALSE)
+anbm_weights = read.csv("~/complex_hierarchy/anbm_model_c_lstm_seq1_rand2.csv", header=FALSE)
+abn_acc = read.csv("~/complex_hierarchy/abn_model_c_lstm_loss_seq1_rand2.csv", header=TRUE)%>% mutate(language = "abn")
+anbm_acc = read.csv("~/complex_hierarchy/anbm_model_c_lstm_loss_seq1_rand2.csv", header=TRUE)%>% mutate(language = "anbm")
 #anbm_weights = read.csv("C:\\Users\\Charlie\\PycharmProjects\\complex_hierarchy\\anbm_model_r.csv", header=FALSE)
 #abn_weights = read.csv("C:\\Users\\Charlie\\PycharmProjects\\complex_hierarchy\\abn_model_r.csv", header=FALSE)
-weight_names = colnames(anbn_weights)
 #anbn_acc = anbn_acc %>%mutate(acc_group=cut(accuracy,seq(.5,1,.05),ordered_result=TRUE))
 #dyck_acc = dyck_acc %>%mutate(acc_group=cut(accuracy,seq(.5,1,.05),ordered_result=TRUE))
 
-dyck_kld = get_kld_growth(dyck_weights, dyck_acc, seq(-2,2,.02), seq(.5,1,.025)) %>% mutate(language = "dyck") %>% filter(acc_group != "(0.5,0.525]")
-anbn_kld = get_kld_growth(anbn_weights, anbn_acc, seq(-2,2,.02), seq(.5,1,.025)) %>% mutate(language = "anbn") %>% filter(acc_group != "(0.5,0.525]")
-abn_kld = get_kld_growth(abn_weights, abn_acc, seq(-2,2,.02), seq(.5,1,.025)) %>% mutate(language = "abn") %>% filter(acc_group != "(0.5,0.525]")
-anbm_kld = get_kld_growth(anbm_weights, anbm_acc, seq(-2,2,.02), seq(.5,1,.025)) %>% mutate(language = "anbm") %>% filter(acc_group != "(0.5,0.525]")
+dyck_kld = get_kld_growth(dyck_weights, dyck_acc, seq(-2,2,.02), seq(.5,1,.025)) #%>% mutate(language = "dyck") %>% filter(acc_group != "(0.5,0.525]")
+anbn_kld = get_kld_growth(anbn_weights, anbn_acc, seq(-2,2,.02), seq(.5,1,.025)) #%>% mutate(language = "anbn") %>% filter(acc_group != "(0.5,0.525]")
+abn_kld = get_kld_growth(abn_weights, abn_acc, seq(-2,2,.02), seq(.5,1,.025)) #%>% mutate(language = "abn") %>% filter(acc_group != "(0.5,0.525]")
+anbm_kld = get_kld_growth(anbm_weights, anbm_acc, seq(-2,2,.02), seq(.5,1,.025)) #%>% mutate(language = "anbm") %>% filter(acc_group != "(0.5,0.525]")
 
-klds = rbind(dyck_kld,anbn_kld,abn_kld,anbm_kld)
+klds = rbind(dyck_kld[[2]]%>% mutate(language = "dyck"),anbn_kld[[2]]%>% mutate(language = "anbn"),abn_kld[[2]]%>% mutate(language = "abn"), anbm_kld[[2]]%>% mutate(language = "anbm"))
 
-plot = ggplot(klds, aes(x=acc_group,y=kld, group=language)) + geom_line(aes(color=language))
+plot = ggplot(klds, aes(x=acc_group,y=model_kld, group=language)) + geom_line(aes(color=language))
 plot
+
+
+
+dyck_kld_loss = get_kld_growth_loss(dyck_weights, dyck_acc, seq(-2,2,.02), seq(1,.25,-.25)) #%>% mutate(language = "dyck") %>% filter(acc_group != "(0.5,0.525]")
+anbn_kld_loss = get_kld_growth_loss(anbn_weights, anbn_acc, seq(-2,2,.02), seq(1,.25,-.25)) #%>% mutate(language = "anbn") %>% filter(acc_group != "(0.5,0.525]")
+abn_kld_loss = get_kld_growth_loss(abn_weights, abn_acc, seq(-2,2,.02), seq(1,.25,-.25)) #%>% mutate(language = "abn") %>% filter(acc_group != "(0.5,0.525]")
+anbm_kld_loss = get_kld_growth_loss(anbm_weights, anbm_acc, seq(-2,2,.02), seq(1,.25,-.25)) #%>% mutate(language = "anbm") %>% filter(acc_group != "(0.5,0.525]")
+
+klds_loss = rbind(dyck_kld_loss[[2]]%>% mutate(language = "dyck")%>%inner_join(dyck_acc%>%mutate(ID = row_number())),
+                  anbn_kld_loss[[2]]%>% mutate(language = "anbn")%>%inner_join(anbn_acc%>%mutate(ID = row_number())),
+                  abn_kld_loss[[2]]%>% mutate(language = "abn")%>%inner_join(abn_acc%>%mutate(ID = row_number())), 
+                  anbm_kld_loss[[2]]%>% mutate(language = "anbm")%>%inner_join(anbm_acc%>%mutate(ID = row_number())))
+
+plot = ggplot(klds_loss, aes(x=accuracy,y=model_kld, group=language)) + geom_point(alpha=.1, aes(color=language))+geom_smooth()
+plot
+
 
 #anbn = merge(anbn_weights, anbn_acc, by = 'row.names')%>% gather("parameter","weight",weight_names)#%>% filter(acc_group!="(0.975,1.03]")
 #dyck = merge(dyck_weights, dyck_acc, by = 'row.names')%>% gather("parameter","weight",weight_names)#%>% filter(acc_group!="(0.975,1.03]")

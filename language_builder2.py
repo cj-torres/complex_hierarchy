@@ -1,5 +1,6 @@
 import random
 import torch
+from collections import Counter
 
 
 def dict_map(s):
@@ -8,10 +9,22 @@ def dict_map(s):
 
 
 def geometric(p, counts=0):
-    if random.uniform(0,1)>p:
+    # recursive function to return samples from a geometric distribution
+    if random.uniform(0, 1) > p:
         return geometric(p, counts+1)
     else:
         return counts
+
+
+def shuffler(language):
+    lang_counts = Counter(language)
+    shuffled = list(lang_counts.keys())
+    random.shuffle(shuffled)
+    shuffled_lang = []
+    for key in shuffled:
+        shuffled_lang += [key]*lang_counts[key]
+    return shuffled_lang
+
 
 #checkers
 def dyck_1_checker(string):
@@ -71,7 +84,7 @@ def gen_dyck1(max_length):
 
 def gen_dyck1_words_redundant(N, max_length):
     dyck1 = []
-    while len(dyck1) < N+1:
+    while len(dyck1) < N:
         dyck1.append(gen_dyck1(max_length))
     return dyck1
 
@@ -91,6 +104,23 @@ def make_dyck1_continuation(w):
 def make_dyck1_io_cont_redundant(N, max_length):
     dyck1 = gen_dyck1_words_redundant(N, max_length)
     dyck1.sort(key=len)
+    x = []
+    y = []
+    mask = []
+    for word in dyck1:
+        x.append(torch.Tensor(list(map(dict_map, word))))
+        y.append(torch.Tensor(make_dyck1_continuation(word)))
+        mask.append(torch.ones(len(word)))
+    x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True).type(torch.IntTensor)
+    y = torch.nn.utils.rnn.pad_sequence(y, batch_first=True).type(torch.IntTensor)
+    mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True).type(torch.BoolTensor)
+
+    return x, y, mask
+
+
+def make_dyck1_io_cont_shuffled(N, max_length):
+    dyck1 = gen_dyck1_words_redundant(N, max_length)
+    dyck1 = shuffler(dyck1)
     x = []
     y = []
     mask = []
@@ -125,6 +155,23 @@ def make_anbn_continuation(w):
 def make_anbn_io_cont_redundant(N, p):
     anbn = gen_anbn_words_redundant(N, p)
     anbn.sort(key=len)
+    x = []
+    y = []
+    mask = []
+    for word in anbn:
+        x.append(torch.Tensor(list(map(dict_map, word))))
+        y.append(torch.Tensor(make_anbn_continuation(word)))
+        mask.append(torch.ones(len(word)))
+    x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True).type(torch.IntTensor)
+    y = torch.nn.utils.rnn.pad_sequence(y, batch_first=True).type(torch.IntTensor)
+    mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True).type(torch.BoolTensor)
+
+    return x, y, mask
+
+
+def make_anbn_io_cont_shuffled(N, p):
+    anbn = gen_anbn_words_redundant(N, p)
+    anbn = shuffler(anbn)
     x = []
     y = []
     mask = []
@@ -174,6 +221,23 @@ def make_anbm_io_cont_redundant(N, p):
     return x, y, mask
 
 
+def make_anbm_io_cont_shuffled(N, p):
+    anbm = gen_anbm_words_redundant(N, p)
+    anbm = shuffler(anbm)
+    x = []
+    y = []
+    mask = []
+    for word in anbm:
+        x.append(torch.Tensor(list(map(dict_map, word))))
+        y.append(torch.Tensor(make_anbm_continuation(word)))
+        mask.append(torch.ones(len(word)))
+    x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True).type(torch.IntTensor)
+    y = torch.nn.utils.rnn.pad_sequence(y, batch_first=True).type(torch.IntTensor)
+    mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True).type(torch.BoolTensor)
+
+    return x, y, mask
+
+
 # (ab)n
 def gen_abn_words_redundant(N, p):
     abn = []
@@ -192,6 +256,23 @@ def make_abn_continuation(w):
 def make_abn_io_cont_redundant(N, p):
     abn = gen_abn_words_redundant(N, p)
     abn.sort(key=len)
+    x = []
+    y = []
+    mask = []
+    for word in abn:
+        x.append(torch.Tensor(list(map(dict_map, word))))
+        y.append(torch.Tensor(make_abn_continuation(word)))
+        mask.append(torch.ones(len(word)))
+    x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True).type(torch.IntTensor)
+    y = torch.nn.utils.rnn.pad_sequence(y, batch_first=True).type(torch.IntTensor)
+    mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True).type(torch.BoolTensor)
+
+    return x, y, mask
+
+
+def make_abn_io_cont_shuffled(N, p):
+    abn = gen_abn_words_redundant(N, p)
+    abn = shuffler(abn)
     x = []
     y = []
     mask = []
@@ -238,6 +319,23 @@ def make_anbnan_io_cont_redundant(N, p):
     return x, y, mask
 
 
+def make_anbnan_io_cont_shuffled(N, p):
+    anbnan = gen_anbnan_words_redundant(N, p)
+    anbnan = shuffler(anbnan)
+    x = []
+    y = []
+    mask = []
+    for word in anbnan:
+        x.append(torch.Tensor(list(map(dict_map, word))))
+        y.append(torch.Tensor(make_anbnan_continuation(word)))
+        mask.append(torch.ones(len(word)))
+    x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True).type(torch.IntTensor)
+    y = torch.nn.utils.rnn.pad_sequence(y, batch_first=True).type(torch.IntTensor)
+    mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True).type(torch.BoolTensor)
+
+    return x, y, mask
+
+
 # double dyck
 def make_double_abplus_redundant(N, p):
     double_abplus = []
@@ -263,6 +361,23 @@ def make_double_abplus_continuation(w):
 def make_double_abplus_io_cont_redundant(N, p):
     double_abplus = make_double_abplus_redundant(N, p)
     double_abplus.sort(key=len)
+    x = []
+    y = []
+    mask = []
+    for word in double_abplus:
+        x.append(torch.Tensor(list(map(dict_map, word))))
+        y.append(torch.Tensor(make_double_abplus_continuation(word)))
+        mask.append(torch.ones(len(word)))
+    x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True).type(torch.IntTensor)
+    y = torch.nn.utils.rnn.pad_sequence(y, batch_first=True).type(torch.IntTensor)
+    mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True).type(torch.BoolTensor)
+
+    return x, y, mask
+
+
+def make_double_abplus_io_cont_shuffled(N, p):
+    double_abplus = make_double_abplus_redundant(N, p)
+    double_abplus = shuffler(double_abplus)
     x = []
     y = []
     mask = []

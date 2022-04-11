@@ -250,6 +250,19 @@ def random_split_no_overfit(x, y, length, r=.85):
     return (x_train, y_train, length_train), (x_test, y_test, length_test)
 
 
+def random_split_no_overfit(x, y, length, r=.85):
+    # should work, as all sets should be sorted
+    cut = int(len(x)*r)
+    x_train = x[:cut]
+    x_test = x[cut:]
+    y_train = y[:cut]
+    y_test = y[cut:]
+    length_train = length[:cut]
+    length_test = length[cut:]
+
+    return (x_train, y_train, length_train), (x_test, y_test, length_test)
+
+
 def random_split(x, y, length, r=.8):
     indx = torch.BoolTensor([i<(r*len(y)) for i, _ in enumerate(y)])
     shuffle(indx)
