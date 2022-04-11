@@ -17,12 +17,14 @@ def geometric(p, counts=0):
 
 
 def shuffler(language):
+    N = len(language)
     lang_counts = Counter(language)
     shuffled = list(lang_counts.keys())
     random.shuffle(shuffled)
     shuffled_lang = []
     for key in shuffled:
         shuffled_lang += [key]*lang_counts[key]
+    assert (len(shuffled_lang) == N)
     return shuffled_lang
 
 
