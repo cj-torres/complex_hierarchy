@@ -2,7 +2,7 @@
 
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-import language_builder2 as lb
+import language_builders as lb
 import csv
 from random import shuffle
 from random import sample
@@ -24,40 +24,40 @@ def random_love_note():
     return sample(love_strings,1)[0]
 
 
-class SimpleClassifier(torch.nn.Module):
-    def __init__(self, alphabet_sz, embed_dim, hidden_sz, final_layer_sz):
-        super(SimpleClassifier, self).__init__()
-        self.hidden_size = hidden_sz
-        self.embedding = torch.nn.Embedding(alphabet_sz, embed_dim, padding_idx=0)
-        self.rnn = torch.nn.RNN(
-            input_size=embed_dim,
-            hidden_size=hidden_sz,
-            batch_first=True
-        )
-        self.final_layer = torch.nn.Linear(hidden_sz, final_layer_sz)
-        self.final_transform = torch.nn.Tanh()
-        self.out = torch.nn.Linear(final_layer_sz, 1)
-        self.out_f = torch.nn.Sigmoid()
-        self.init_weights()
-
-    def init_weights(self):
-        for p in self.parameters():
-            if p.data.ndimension() >= 2:
-                torch.nn.init.normal_(p.data)
-            else:
-                torch.nn.init.zeros_(p.data)
-
-    def forward(self, x, lengths):
-        bs, seq_sz = x.size()
-        h_t = torch.stack([torch.zeros(bs).to(x.device)] * self.hidden_size, dim=1).unsqueeze(dim=0)
-        embeds = self.embedding(x)
-
-        seq, out_h = self.rnn(embeds, h_t)
-        seq = seq[torch.arange(seq.size(0)),lengths,:]
-        final = self.final_transform(self.final_layer(seq))
-        y_hat = self.out_f(self.out(final))
-
-        return y_hat.squeeze()
+# class SimpleClassifier(torch.nn.Module):
+#     def __init__(self, alphabet_sz, embed_dim, hidden_sz, final_layer_sz):
+#         super(SimpleClassifier, self).__init__()
+#         self.hidden_size = hidden_sz
+#         self.embedding = torch.nn.Embedding(alphabet_sz, embed_dim, padding_idx=0)
+#         self.rnn = torch.nn.RNN(
+#             input_size=embed_dim,
+#             hidden_size=hidden_sz,
+#             batch_first=True
+#         )
+#         self.final_layer = torch.nn.Linear(hidden_sz, final_layer_sz)
+#         self.final_transform = torch.nn.Tanh()
+#         self.out = torch.nn.Linear(final_layer_sz, 1)
+#         self.out_f = torch.nn.Sigmoid()
+#         self.init_weights()
+#
+#     def init_weights(self):
+#         for p in self.parameters():
+#             if p.data.ndimension() >= 2:
+#                 torch.nn.init.normal_(p.data)
+#             else:
+#                 torch.nn.init.zeros_(p.data)
+#
+#     def forward(self, x, lengths):
+#         bs, seq_sz = x.size()
+#         h_t = torch.stack([torch.zeros(bs).to(x.device)] * self.hidden_size, dim=1).unsqueeze(dim=0)
+#         embeds = self.embedding(x)
+#
+#         seq, out_h = self.rnn(embeds, h_t)
+#         seq = seq[torch.arange(seq.size(0)),lengths,:]
+#         final = self.final_transform(self.final_layer(seq))
+#         y_hat = self.out_f(self.out(final))
+#
+#         return y_hat.squeeze()
 
 
 class LSTMBranchSequencer(torch.nn.Module):
@@ -91,10 +91,10 @@ class LSTMBranchSequencer(torch.nn.Module):
         return y_hat.squeeze()
 
 
-class LSTMCLassifier(torch.nn.Module):
+class LSTMClassifier(torch.nn.Module):
 
     def __init__(self, alphabet_sz, embed_dim, hidden_sz, final_layer_sz):
-        super(LSTMCLassifier, self).__init__()
+        super(LSTMClassifier, self).__init__()
         self.hidden_size = hidden_sz
         self.embedding = torch.nn.Embedding(alphabet_sz, embed_dim, padding_idx=0)
         self.lstm = torch.nn.LSTM(
@@ -128,6 +128,42 @@ class LSTMCLassifier(torch.nn.Module):
         return y_hat.squeeze()
 
 
+class LSTMSequencer(torch.nn.Module):
+
+    def __init__(self, alphabet_sz, embed_dim, hidden_sz, final_layer_sz, output_sz):
+        super(LSTMSequencer, self).__init__()
+        self.hidden_size = hidden_sz
+        self.embedding = torch.nn.Embedding(alphabet_sz, embed_dim, padding_idx=0)
+        self.lstm = torch.nn.LSTM(
+            input_size=embed_dim,
+            hidden_size=hidden_sz,
+            batch_first=True
+        )
+        self.final_layer = torch.nn.Linear(hidden_sz, final_layer_sz)
+        self.final_transform = torch.nn.Tanh()
+        self.out = torch.nn.Linear(final_layer_sz, output_sz)
+        self.out_f = torch.nn.Softmax(dim=-1)
+        self.init_weights()
+
+    def init_weights(self):
+        for p in self.parameters():
+            if p.data.ndimension() >= 2:
+                torch.nn.init.normal_(p.data)
+            else:
+                torch.nn.init.zeros_(p.data)
+
+    def forward(self, x):
+        #bs, seq_sz = x.size()
+        #h_t = torch.stack([torch.zeros(bs).to(x.device)] * self.hidden_size, dim=1).unsqueeze(dim=0)
+        embeds = self.embedding(x)
+
+        seq, out_h = self.lstm(embeds)
+        final = self.final_transform(self.final_layer(seq))
+        y_hat = self.out_f(self.out(final))
+
+        return y_hat.squeeze()
+
+
 def bernoulli_loss(y, y_hat):
     return -(y * y_hat.log() + (1 - y) * (1 - y_hat).log()).mean()
 
@@ -136,8 +172,12 @@ def bernoulli_loss_cont(y, y_hat, mask):
     return -(torch.xlogy(y[mask], y_hat[mask]) + torch.xlogy(1-y[mask], 1-y_hat[mask])).sum(dim=1).mean(dim=0)
 
 
-def correct_guesses(y, y_hat, mask):
+def correct_guesses_batch_seq(y, y_hat, mask):
     return (y_hat[mask].round() == y[mask]).sum() / torch.numel(y[mask])
+
+
+def correct_guesses_seq(y, y_hat, mask):
+    return (torch.argmax(y_hat, dim=-1)[mask] == y[mask]).sum() / torch.numel(y[mask])
 
 
 def train(model, x_train, y_train, lengths_train, x_test, y_test, lengths_test, epochs):
@@ -175,21 +215,29 @@ def train(model, x_train, y_train, lengths_train, x_test, y_test, lengths_test, 
     return model, best_loss
 
 
-def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, target_loss, cutoff_epochs, batch_sz):
+def branch_seq_train(model, language_set, target_loss, is_loss, batch_sz, max_epochs, increment, patience=20):
     from math import ceil
     from random import sample
 
+
+
     model.to("cuda")
 
-    batches = len(x_train)
+    batches = len(language_set.train_input)
     batch_q = ceil(batches/batch_sz)
     batch_r = batches % batch_sz
     indxs = [i*batch_sz for i in range(batch_q)]
     indxs[-1] = indxs[-1] - batch_sz + batch_r
 
-    x_test = x_test.to("cuda")
-    y_test = y_test.to("cuda")
-    op = torch.optim.Adam(model.parameters(), lr=.0005, weight_decay=1e-7)
+    x_train = language_set.train_input.to("cuda")
+    y_train = language_set.train_output.to("cuda")
+    mask_train = language_set.train_mask.to("cuda")
+
+    x_test = language_set.test_input.to("cuda")
+    y_test = language_set.test_output.to("cuda")
+    mask_test = language_set.test_mask.to("cuda")
+
+    op = torch.optim.Adam(model.parameters(), lr=.0005)
     best_loss = torch.tensor([float('inf')]).squeeze()
     loss_test = torch.tensor([float('inf')]).squeeze()
     percent_correct = 0
@@ -197,7 +245,9 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
 
     indices = range(batches)
     train_percent_correct = 0
-    while loss_test > target_loss:
+    test_percent_correct = 0
+    epoch = 0
+    while (is_loss and loss_test > target_loss) or ((not is_loss) and test_percent_correct < target_loss) and epoch < max_epochs:
         batch = torch.tensor(sample(indices, batch_sz)).type(torch.LongTensor)
         for param in model.parameters():
             param.grad = None
@@ -205,9 +255,9 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
         y = y_train[batch].to("cuda")
         mask = mask_train[batch].to("cuda")
         y_hat = model(x)
-        loss = bernoulli_loss_cont(y, y_hat, mask)
+        loss = bernoulli_loss_cont(y_hat, y)
         loss.backward()
-        train_percent_correct = correct_guesses(y, y_hat, mask)
+        train_percent_correct = correct_guesses_batch_seq(y, y_hat, mask)
         del mask, x, y
 
         op.step()
@@ -216,11 +266,11 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
             y_test_hat = model(x_test)
             loss_test = bernoulli_loss_cont(y_test, y_test_hat, mask_test)
 
-            test_percent_correct = correct_guesses(y_test, y_test_hat, mask_test)
+            test_percent_correct = correct_guesses_batch_seq(y_test, y_test_hat, mask_test)
 
         if loss_test >= best_loss:
             early_stop_counter += 1
-            if early_stop_counter > 100:
+            if early_stop_counter > patience:
                 model.load_state_dict(torch.load("best_net_cache.ptr"))
                 print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
                       (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
@@ -232,9 +282,97 @@ def seq_train(model, x_train, y_train, mask_train, x_test, y_test, mask_test, ta
             torch.save(model.state_dict(), "best_net_cache.ptr")
         print("Accuracy: %s, loss: %s, counter: %d, train accuracy: %s" %
               (percent_correct.item(), loss_test.item(), early_stop_counter, train_percent_correct.item()))
+
+        if epoch % increment == 0:
+            yield model, best_loss, percent_correct
+
+        epoch+=1
+
     print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
           (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
+
     return model, best_loss, percent_correct
+
+
+def seq_train(model, language_set, batch_sz, increment, max_epochs, patience=20):
+    from math import ceil
+    from random import sample
+
+    #model.to("cuda")
+
+    ce_loss = torch.nn.CrossEntropyLoss()
+
+    batches = len(language_set.train_input)
+    batch_q = ceil(batches/batch_sz)
+    batch_r = batches % batch_sz
+    indxs = [i*batch_sz for i in range(batch_q)]
+    indxs[-1] = indxs[-1] - batch_sz + batch_r
+
+    x_train = language_set.train_input#.to("cuda")
+    y_train = language_set.train_output#.to("cuda")
+    mask_train = language_set.train_mask#.to("cuda")
+
+    x_test = language_set.test_input#.to("cuda")
+    y_test = language_set.test_output#.to("cuda")
+    mask_test = language_set.test_mask#.to("cuda")
+    op = torch.optim.Adam(model.parameters(), lr=.0005)
+    best_loss = torch.tensor([float('inf')]).squeeze()
+    loss_test = torch.tensor([float('inf')]).squeeze()
+    percent_correct = 0
+    early_stop_counter = 0
+
+    indices = range(batches)
+    train_percent_correct = 0
+    test_percent_correct = 0
+    epoch = 0
+    while epoch < max_epochs:
+        batch = torch.tensor(sample(indices, batch_sz)).type(torch.LongTensor)
+        for param in model.parameters():
+            param.grad = None
+        x = x_train[batch]#.to("cuda")
+        y = y_train[batch]#.to("cuda")
+        mask = mask_train[batch]#.to("cuda")
+        y_hat = model(x)
+        print(y_hat[mask])
+        print(y[mask])
+
+        loss = ce_loss(y_hat[mask], y[mask])
+        loss.backward()
+        train_percent_correct = correct_guesses_seq(y, y_hat, mask)
+        del mask, x, y
+
+        op.step()
+
+        with torch.no_grad():
+            y_test_hat = model(x_test)
+            test_mask = language_set.test_mask
+            loss_test = ce_loss(y_test_hat[test_mask], y_test[test_mask])
+
+            test_percent_correct = correct_guesses_seq(y_test, y_test_hat, mask_test)
+
+        if loss_test >= best_loss:
+            early_stop_counter += 1
+            if early_stop_counter > patience:
+                model.load_state_dict(torch.load("best_net_cache.ptr"))
+                print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
+                      (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
+                return model, best_loss, percent_correct, epoch
+        else:
+            best_loss = loss_test
+            early_stop_counter = 0
+            percent_correct = test_percent_correct
+            torch.save(model.state_dict(), "best_net_cache.ptr")
+
+        print("Accuracy: %s, loss: %s, counter: %d, train accuracy: %s" %
+              (percent_correct.item(), loss_test.item(), early_stop_counter, train_percent_correct.item()))
+
+        if epoch % increment == 0:
+            yield model, best_loss, percent_correct, epoch
+
+        epoch += 1
+    print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
+          (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
+    return model, best_loss, percent_correct, epoch
 
 
 def random_split_no_overfit(x, y, length, r=.85):
