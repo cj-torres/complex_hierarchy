@@ -298,7 +298,7 @@ def seq_train(model, language_set, batch_sz, increment, max_epochs, patience=20)
     from math import ceil
     from random import sample
 
-    #model.to("cuda")
+    model.to("cuda")
 
     ce_loss = torch.nn.CrossEntropyLoss()
 
@@ -308,33 +308,31 @@ def seq_train(model, language_set, batch_sz, increment, max_epochs, patience=20)
     indxs = [i*batch_sz for i in range(batch_q)]
     indxs[-1] = indxs[-1] - batch_sz + batch_r
 
-    x_train = language_set.train_input#.to("cuda")
-    y_train = language_set.train_output#.to("cuda")
-    mask_train = language_set.train_mask#.to("cuda")
+    x_train = language_set.train_input.to("cuda")
+    y_train = language_set.train_output.to("cuda")
+    mask_train = language_set.train_mask.to("cuda")
 
-    x_test = language_set.test_input#.to("cuda")
-    y_test = language_set.test_output#.to("cuda")
-    mask_test = language_set.test_mask#.to("cuda")
-    op = torch.optim.Adam(model.parameters(), lr=.0005)
+    x_test = language_set.test_input.to("cuda")
+    y_test = language_set.test_output.to("cuda")
+    mask_test = language_set.test_mask.to("cuda")
+    op = torch.optim.Adam(model.parameters(), lr=.0005, weight_decay=.05)
     best_loss = torch.tensor([float('inf')]).squeeze()
-    loss_test = torch.tensor([float('inf')]).squeeze()
+    #loss_test = torch.tensor([float('inf')]).squeeze()
     percent_correct = 0
     early_stop_counter = 0
 
     indices = range(batches)
     train_percent_correct = 0
-    test_percent_correct = 0
+    #test_percent_correct = 0
     epoch = 0
     while epoch < max_epochs:
         batch = torch.tensor(sample(indices, batch_sz)).type(torch.LongTensor)
         for param in model.parameters():
             param.grad = None
-        x = x_train[batch]#.to("cuda")
-        y = y_train[batch]#.to("cuda")
-        mask = mask_train[batch]#.to("cuda")
+        x = x_train[batch].to("cuda")
+        y = y_train[batch].to("cuda")
+        mask = mask_train[batch].to("cuda")
         y_hat = model(x)
-        print(y_hat[mask])
-        print(y[mask])
 
         loss = ce_loss(y_hat[mask], y[mask])
         loss.backward()
@@ -356,8 +354,9 @@ def seq_train(model, language_set, batch_sz, increment, max_epochs, patience=20)
                 model.load_state_dict(torch.load("best_net_cache.ptr"))
                 print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
                       (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
-                return model, best_loss, percent_correct, epoch
+                return model, best_loss, percent_correct, best_epoch
         else:
+            best_epoch = epoch + 1
             best_loss = loss_test
             early_stop_counter = 0
             percent_correct = test_percent_correct
@@ -366,13 +365,15 @@ def seq_train(model, language_set, batch_sz, increment, max_epochs, patience=20)
         print("Accuracy: %s, loss: %s, counter: %d, train accuracy: %s" %
               (percent_correct.item(), loss_test.item(), early_stop_counter, train_percent_correct.item()))
 
-        if epoch % increment == 0:
-            yield model, best_loss, percent_correct, epoch
-
         epoch += 1
+
+        if epoch % increment == 0: #and epoch != max_epochs:
+            print("Saving epoch %d" % (epoch))
+            yield model, loss_test, test_percent_correct, epoch
+
     print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
           (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
-    return model, best_loss, percent_correct, epoch
+    #return model, best_loss, percent_correct, epoch
 
 
 def random_split_no_overfit(x, y, length, r=.85):

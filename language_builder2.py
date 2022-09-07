@@ -4,7 +4,7 @@ from collections import Counter
 
 
 def dict_map(s):
-    abcd_map = {'S': 1, 'a': 2, 'b': 3, 'c': 4, 'd': 5}
+    abcd_map = {'S': 0, 'a': 1, 'b': 2, 'c': 3, 'd': 4}
     return abcd_map[s]
 
 
@@ -145,6 +145,17 @@ def gen_anbn_words_redundant(N, p):
         anbn.append("S"+"a"*n+"b"*n)
     return anbn
 
+def gen_anbn_io_lang_model(N, p):
+    anbn = gen_anbn_words_redundant(N, p)
+    anbn.sort(key=len)
+    anbn_o = [w[]]
+    x = []
+    y = []
+    mask = []
+    for word in anbn:
+        x.append(torch.Tensor(list(map(dict_map, word))))
+        y.append(torch.Tensor(make_anbn_continuation(word)))
+        mask.append(torch.ones(len(word)))
 
 def make_anbn_continuation(w):
     length = len(w) - 1
@@ -152,7 +163,6 @@ def make_anbn_continuation(w):
     cont.insert(0,[1, 1, 0])
     cont[-1] = [1,0,0]
     return cont
-
 
 def make_anbn_io_cont_redundant(N, p):
     anbn = gen_anbn_words_redundant(N, p)
