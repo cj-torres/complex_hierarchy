@@ -43,11 +43,27 @@ def run_seq(num, filename, generator_function, **kwargs):
                     writer_weights.writerow(weights)
                     writer_details.writerow([i+1, best_loss.item(), percent_correct.item(), epoch])
 
+
+def run_transf_seq(num, filename, generator_function, **kwargs):
+    with open(filename+".csv", 'w', newline='') as model_weight_file:
+        with open(filename+"_loss.csv", 'w', newline='') as accuracy_file:
+            writer_weights = csv.writer(model_weight_file)
+            writer_details = csv.writer(accuracy_file)
+            writer_details.writerow(["model_num", "best_loss", "accuracy", "target", "epoch"])
+            for i in range(num):
+                language_set = generator_function(**kwargs)
+                print("Model %d" % (i + 1))
+                model = TransformerSequencer(4, 4, 3, 1, 4, 3)
+                for model_out, best_loss, percent_correct, epoch in seq_train(model, language_set, 512, 20, 10000):
+                    weights = model_to_list(model_out)
+                    writer_weights.writerow(weights)
+                    writer_details.writerow([i+1, best_loss.item(), percent_correct.item(), epoch])
+
+
 if __name__ == '__main__':
-    target_accuracies = [.975]
     N = 1000
-    run_seq(N, "dyck1_new", lb.make_dyck1_sets,
-            **{"max_length": 200, "N": 1000, "reject_threshold": 200, "split_p": .795, "p": 50 / 151, "q": 50 / 151})
+    run_seq(N, "dyck1_new", lb.make_dyck1_sets_geom,
+            **{"max_length": 200, "N": 1000, "reject_threshold": 200, "split_p": .795, "q": .5})
     run_seq(N, "anbm_new", lb.make_anbm_sets,
             **{"p":.01, "N":1000, "reject_threshold": 200, "split_p": .795})
     run_seq(N, "abn_new", lb.make_abn_sets,

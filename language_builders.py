@@ -122,12 +122,42 @@ def gen_dyck1_word(max_length, p=.5, q=.25):
     return "S"+a
 
 
+def dyck1_transition_geom(s, q=.5):
+    # for generation as a CFG
+    # p and q represent probabilities of different rewrites
+    # p: S -> aSb
+    # q: S -> SS
+    # 1-p-q: S -> e
+    assert (0 <= q <= 1)
+    c = random.choice([i for i in range(len(s)) if s[i] == "S"])
+    x = random.uniform(0, 1)
+
+    return s[:c] + (x < q) * "aSb" + (q <= x) * "SS" + s[c + 1:]
+
+
+def gen_dyck1_word_geom(l, q=.5):
+    assert (0 <= q <= 1)
+    word = "S"
+    while len(word.replace("S", "")) < l*2:
+        word = dyck1_transition_geom(word, q)
+    return "S"+word.replace("S", "")
+
+
 def gen_dyck1_words_redundant(N, max_length,  p=.5, q=.25):
     # generates N words in dyck1 not exceeding max_length
     # p and q supplied to lower functions
     dyck1 = []
     while len(dyck1) < N:
         dyck1.append(gen_dyck1_word(max_length, p=p, q=q))
+    return dyck1
+
+
+def gen_dyck1_words_geom(N, p,  q=.5):
+    # generates N words in dyck1 not exceeding max_length
+    # p and q supplied to lower functions
+    dyck1 = []
+    while len(dyck1) < N:
+        dyck1.append(gen_dyck1_word_geom(geometric(p), q))
     return dyck1
 
 
@@ -140,6 +170,22 @@ def make_dyck1_sets(N, max_length, split_p, reject_threshold, p=.5, q=.25):
     assert(split_p <= 1)
     assert(N*(1-split_p) >= reject_threshold)
     dyck1 = gen_dyck1_words_redundant(N, max_length,  p=p, q=q)
+    dyck1_train_in, dyck1_test_in = shuffler(dyck1, split_p, reject_threshold)
+    dyck1_train = to_tensors(dyck1_train_in)
+    dyck1_test = to_tensors(dyck1_test_in)
+
+    return LanguageData(*dyck1_train+dyck1_test)
+
+
+def make_dyck1_sets_geom(N, p, split_p, reject_threshold, q=.5):
+    # generates N words in dyck1 not exceeding max_length
+    # p and q supplied to lower functions
+    # split_p is the training set percentage (approximated), reject_threshold minimum test_set size
+    # for converging lengths of mean mu set p and q s.t. mu = (mu+2)p+2*mu*q
+    # p == q -> p = q = mu/(3*mu+2)
+    assert(split_p <= 1)
+    assert(N*(1-split_p) >= reject_threshold)
+    dyck1 = gen_dyck1_words_geom(N, p,  q)
     dyck1_train_in, dyck1_test_in = shuffler(dyck1, split_p, reject_threshold)
     dyck1_train = to_tensors(dyck1_train_in)
     dyck1_test = to_tensors(dyck1_test_in)
