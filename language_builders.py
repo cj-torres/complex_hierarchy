@@ -82,6 +82,63 @@ def shuffler(language, split_percent, reject_size = 150):
     assert (len(shuffled_lang_train)+len(shuffled_lang_test) == N)
     return shuffled_lang_train, shuffled_lang_test
 
+### Language checkers, good for troubleshooting ###
+
+def anbn_checker(string):
+    counter = 0
+    switch = False
+    for s in string:
+        if s == "a":
+            if switch:
+                return False
+            counter += 1
+        if s == "b":
+            counter -= 1
+            switch = True
+    if counter != 0:
+        return False
+    else:
+        return True
+
+
+def dyck_1_checker(string):
+    counter = 0
+    for s in string:
+        if counter < 0:
+            return False
+        elif s == "a":
+            counter += 1
+        else:
+            counter -= 1
+    if counter != 0:
+        return False
+    else:
+        return True
+
+
+def anbm_checker(string):
+    flip = False
+    for s in string:
+        if not flip:
+            if s == "b":
+                flip = True
+        elif s == "a":
+            return False
+    return True
+
+
+def abn_checker(string):
+    if (len(string)%2) != 0:
+        return False
+    for i, s in enumerate(string):
+        if (i%2==0) and s == "b":
+            return False
+        elif (i%2==1) and s == "a":
+            return False
+    return True
+
+
+
 ### CONTEXT FREE LANGUAGES ###
 
 ###
