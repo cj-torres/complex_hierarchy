@@ -460,7 +460,7 @@ def seq_transformers_train(model, language_set, batch_sz, mask_percent, incremen
         y = y_train[batch].to("cuda")
         mask = torch.distributions.Bernoulli(mask_train[batch].to("cuda")*mask_percent).sample().type(torch.BoolTensor)
         x[mask] = model.mask
-        y_hat = model(x, mask_train[batch])
+        y_hat = model(x)
 
         loss = ce_loss(y_hat[mask], y[mask])
         loss.backward()
@@ -476,7 +476,7 @@ def seq_transformers_train(model, language_set, batch_sz, mask_percent, incremen
 
             x_test_masked[mask] = model.mask
 
-            y_test_hat = model(x_test, test_mask)
+            y_test_hat = model(x_test)
             loss_test = ce_loss(y_test_hat[mask], y_test[mask])
 
             test_percent_correct = correct_guesses_seq(y_test, y_test_hat, mask_test)
