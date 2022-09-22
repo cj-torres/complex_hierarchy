@@ -196,10 +196,10 @@ class TransformerSequencer(torch.nn.Module):
             else:
                 torch.nn.init.zeros_(p.data)
 
-    def forward(self, x, mask, debug=False):
+    def forward(self, x, debug=False):
         embeds = self.embedding(x)
 
-        out = self.transformer(embeds, mask=mask)
+        out = self.transformer(embeds)
         y_hat = self.out_f(out)
 
         if debug:
