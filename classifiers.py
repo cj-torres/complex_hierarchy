@@ -159,9 +159,9 @@ class LSTMSequencer(torch.nn.Module):
 
         seq, out_h = self.lstm(embeds)
         final = self.final_transform(self.final_layer(seq))
-        y_hat = self.out_f(self.out(final))
+        out = self.out(final)
 
-        return y_hat.squeeze()
+        return out.squeeze()
 
 
 class TransformerSequencer(torch.nn.Module):
@@ -186,7 +186,7 @@ class TransformerSequencer(torch.nn.Module):
         )
 
         #self.out = torch.nn.Linear(embed_dim, output_sz)
-        self.out_f = torch.nn.Softmax(dim=-1)
+        #self.out_f = torch.nn.Softmax(dim=-1)
         self.init_weights()
 
     def init_weights(self):
@@ -200,11 +200,10 @@ class TransformerSequencer(torch.nn.Module):
         embeds = self.embedding(x)
 
         out = self.transformer(embeds)
-        y_hat = self.out_f(out)
 
         if debug:
             breakpoint()
-        return y_hat.squeeze()
+        return out.squeeze()
 
 
 
