@@ -185,7 +185,7 @@ class TransformerSequencer(torch.nn.Module):
             num_layers=transformer_depth
         )
 
-        self.out = torch.nn.Linear(embed_dim, output_sz)
+        #self.out = torch.nn.Linear(embed_dim, output_sz)
         self.out_f = torch.nn.Softmax(dim=-1)
         self.init_weights()
 
@@ -196,13 +196,17 @@ class TransformerSequencer(torch.nn.Module):
             else:
                 torch.nn.init.zeros_(p.data)
 
-    def forward(self, x):
+    def forward(self, x, debug=False):
         embeds = self.embedding(x)
 
         out = self.transformer(embeds)
-        y_hat = self.out_f(self.out(out))
+        y_hat = self.out_f(out)
 
+        if debug:
+            breakpoint()
         return y_hat.squeeze()
+
+
 
 
 def bernoulli_loss(y, y_hat):

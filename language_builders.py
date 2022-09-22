@@ -16,7 +16,7 @@ class LanguageData:
 
 
 def dict_map(s):
-    abcd_map = {'S': 0, 'a': 1, 'b': 2, 'c': 3, 'd': 4}
+    abcd_map = {'S': 1, 'a': 2, 'b': 3, 'c': 4, 'd': 5}
     return abcd_map[s]
 
 
@@ -408,3 +408,33 @@ def make_abn_branch_sets(N, p, split_p, reject_threshold):
     abn_test = to_continuation_tensors(abn_test_in, make_abn_continuation)
 
     return LanguageData(*abn_train+abn_test)
+
+
+### Duchon sampler ###
+### Duchon 2000 ###
+
+def dyck_seed(n):
+    return torch.cat([torch.ones(n), -torch.ones(n)]) #.type(torch.LongTensor)
+
+
+def torch_shuffle(tensor):
+    return tensor[torch.randperm(len(tensor))].clone()
+
+
+def dyck_sampler(n):
+    word = dyck_seed(n)
+    word = torch_shuffle(word).to("cuda")
+
+    sum_matrix = torch.triu(torch.ones(n*2, n*2)).transpose(0, 1).to("cuda")
+
+    if all((sum_matrix @ word) >= 0):
+        return word
+
+    for i, u in enumerate(word):
+        if u == 1:
+            candidate = torch.cat([word[i+1:], word[i:i+1], word[:i]])
+            if all((sum_matrix @ candidate) >= 0):
+                return candidate
+
+
+
