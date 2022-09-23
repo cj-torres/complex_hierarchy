@@ -20,6 +20,11 @@ def dict_map(s):
     return abcd_map[s]
 
 
+def dyck_dict_map(s):
+    int_map = {1: 2, -1: 3}
+    return dyck_dict_map[s]
+
+
 def geometric(p):
     return np.random.geometric(p)
 
@@ -414,27 +419,37 @@ def make_abn_branch_sets(N, p, split_p, reject_threshold):
 ### Duchon 2000 ###
 
 def dyck_seed(n):
-    return torch.cat([torch.ones(n), -torch.ones(n)]) #.type(torch.LongTensor)
+    return np.concatenate([np.ones(n), -np.ones(n)]) #.type(torch.LongTensor)
 
 
-def torch_shuffle(tensor):
-    return tensor[torch.randperm(len(tensor))].clone()
+def torch_shuffle(array):
+    return np.copy(np.random.permutation(array))
 
+
+# to-do implement Zipfian distribution
+# ensure lengths follow same distributions across languages
 
 def dyck_sampler(n):
     word = dyck_seed(n)
-    word = torch_shuffle(word).to("cuda")
+    word = torch_shuffle(word)
 
-    sum_matrix = torch.triu(torch.ones(n*2, n*2)).transpose(0, 1).to("cuda")
+    sum_matrix = np.tril(np.ones((n*2, n*2)))
 
-    if all((sum_matrix @ word) >= 0):
+    if ((sum_matrix @ word) >= 0).all():
         return word
 
     for i, u in enumerate(word):
         if u == 1:
-            candidate = torch.cat([word[i+1:], word[i:i+1], word[:i]])
-            if all((sum_matrix @ candidate) >= 0):
-                return candidate
+            candidate = np.concatenate([word[i+1:], word[i:i+1], word[:i]])
+            if ((sum_matrix @ candidate) >= 0).all():
+                return np.copy(candidate)
 
+
+def gen_dyck_uniform(N, p):
+    dyck = []
+    for n in range(N):
+        dyck.append(dyck_sampler(geometric(p)))
+
+    return dyck
 
 
