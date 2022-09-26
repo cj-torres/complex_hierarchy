@@ -163,10 +163,11 @@ class LSTMSequencer(torch.nn.Module):
 
         return out.squeeze()
 
+
 class PositionalEncoding(torch.nn.Module):
     # stolen from https://pytorch.org/tutorials/beginner/transformer_tutorial.html
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
-        super().__init__()
+        super(PositionalEncoding).__init__()
         self.dropout = torch.nn.Dropout(p=dropout)
 
         position = torch.arange(max_len).unsqueeze(1)
@@ -174,6 +175,7 @@ class PositionalEncoding(torch.nn.Module):
         self.pe = torch.zeros(max_len, 1, d_model)
         self.pe[:, 0, 0::2] = torch.sin(position * div_term)
         self.pe[:, 0, 1::2] = torch.cos(position * div_term)
+        self.pe = torch.nn.Parameter(self.pe, requires_grad=False)
 
     def forward(self, x):
         """
