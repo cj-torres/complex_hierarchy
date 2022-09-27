@@ -22,7 +22,7 @@ def dict_map(s):
 
 def dyck_dict_map(s):
     int_map = {1: 2, -1: 3}
-    return dyck_dict_map[s]
+    return int_map[s]
 
 
 def geometric(p):
@@ -43,6 +43,20 @@ def to_tensors(set, dict_map = dict_map):
 
     return input, output, mask
 
+def to_tensors_duchon(set):
+    # for tensors generated with Duchon algorithm (already mapped)
+    input = []
+    output = []
+    mask = []
+    for word in set:
+        input.append(word)
+        output.append(torch.cat([word[1:], torch.Tensor([1])]))
+        mask.append(torch.ones(len(word)))
+    input = torch.nn.utils.rnn.pad_sequence(input, batch_first=True).type(torch.LongTensor)
+    output = torch.nn.utils.rnn.pad_sequence(output, batch_first=True).type(torch.LongTensor)
+    mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True).type(torch.BoolTensor)
+
+    return input, output, mask
 
 def to_continuation_tensors(set, continuation_function, dict_map = dict_map):
     input = []
@@ -275,6 +289,72 @@ def make_dyck1_branch_sets(N, max_length, split_p, reject_threshold, p=.5, q=.25
 
     return LanguageData(*dyck1_train+dyck1_test)
 
+
+### Duchon sampler ###
+# Generates uniformly distributed Dyck words of a given length
+# Overview of algorithm:
+# 1. Randomly generate a balanced string (by shuffling an equal amount of a's and b's)
+# 2. Check if string is a Dyck string
+# 3. If not, for all "a"/1/"open-bracket" pivot word around "a" and check if Dyck string
+#
+# This algorithm works because the pivoting function defines an equivalence class on balanced strings
+# which is guaranteed to contain one and only one Dyck word.
+### Duchon 2000 ###
+
+def dyck_seed(n):
+    # initializes vector with an equal number of a's and b's (1, -1)
+    return np.concatenate([np.ones(n), -np.ones(n)]) #.type(torch.LongTensor)
+
+
+def torch_shuffle(array):
+    # shuffles vector to sample random "Balanced" word
+    return np.copy(np.random.permutation(array))
+
+
+# to-do implement Zipfian distribution
+# ensure lengths follow same distributions across languages
+
+def dyck_sampler(n):
+    # implements Duchon sampling above
+    # matrices used for performance gain
+    word = dyck_seed(n)
+    word = torch_shuffle(word)
+
+    sum_matrix = np.tril(np.ones((n*2, n*2)))
+
+    if ((sum_matrix @ word) >= 0).all():
+        # checks that all prefixes of word never have more closing than opening brackets
+        # (or more -1 than 1)
+        return torch.Tensor(np.insert(np.array([dyck_dict_map(s) for s in word]), 0, 1, axis=0))
+        # returns words in corrected form to align with other formats
+
+    # loop over word and pivot on a's/1's/open brackets
+    for i, u in enumerate(word):
+        if u == 1:
+            candidate = np.concatenate([word[i+1:], word[i:i+1], word[:i]])
+            # check if Dyck word and return if so
+            if ((sum_matrix @ candidate) >= 0).all():
+                return torch.Tensor(np.insert(np.array([dyck_dict_map(s) for s in candidate]), 0, 1, axis=0))
+
+
+def gen_dyck_uniform(N, p):
+    dyck = []
+    for n in range(N):
+        dyck.append(dyck_sampler(geometric(p)))
+
+    return dyck
+
+
+def make_dyck1_sets_uniform(N, p, split_p, reject_threshold):
+    assert (split_p <= 1)
+    assert (N * (1 - split_p) >= reject_threshold)
+    dyck1 = gen_dyck_uniform(N, p)
+    dyck1_train_in, dyck1_test_in = shuffler(dyck1, split_p, reject_threshold)
+    dyck1_train = to_tensors_duchon(dyck1_train_in)
+    dyck1_test = to_tensors_duchon(dyck1_test_in)
+
+    return LanguageData(*dyck1_train + dyck1_test)
+
 ###
 # a^n b^n generating functions
 #
@@ -370,6 +450,39 @@ def make_anbm_branch_sets(N, p, split_p, reject_threshold):
 
     return LanguageData(*anbm_train+anbm_test)
 
+
+###
+# a^2n b^2m
+# This language is to help make the lengths distributable as the other languages
+#
+###
+def gen_a2nb2m_words_redundant(N, p):
+    anbm = []
+    for i in range(N):
+        l = geometric(p)
+        n = random.randint(0, l)
+        m = l - n
+        anbm.append("S"+"a"*2*n+"b"*2*m)
+    return anbm
+
+
+def make_a2nb2m_sets(N, p, split_p, reject_threshold):
+    # generates N words in anbm with n and m sampled from a geometric distribution
+    # p geometric probability
+    # mean of geometric is 1/p
+    assert(split_p <= 1)
+    assert(N*(1-split_p) >= reject_threshold)
+    anbm = gen_a2nb2m_words_redundant(N, p)
+    anbm_train_in, anbm_test_in = shuffler(anbm, split_p, reject_threshold)
+    anbm_train = to_tensors(anbm_train_in)
+    anbm_test = to_tensors(anbm_test_in)
+
+    return LanguageData(*anbm_train+anbm_test)
+
+
+
+
+
 ###
 # ab^n generating functions
 #
@@ -415,41 +528,6 @@ def make_abn_branch_sets(N, p, split_p, reject_threshold):
     return LanguageData(*abn_train+abn_test)
 
 
-### Duchon sampler ###
-### Duchon 2000 ###
 
-def dyck_seed(n):
-    return np.concatenate([np.ones(n), -np.ones(n)]) #.type(torch.LongTensor)
-
-
-def torch_shuffle(array):
-    return np.copy(np.random.permutation(array))
-
-
-# to-do implement Zipfian distribution
-# ensure lengths follow same distributions across languages
-
-def dyck_sampler(n):
-    word = dyck_seed(n)
-    word = torch_shuffle(word)
-
-    sum_matrix = np.tril(np.ones((n*2, n*2)))
-
-    if ((sum_matrix @ word) >= 0).all():
-        return word
-
-    for i, u in enumerate(word):
-        if u == 1:
-            candidate = np.concatenate([word[i+1:], word[i:i+1], word[:i]])
-            if ((sum_matrix @ candidate) >= 0).all():
-                return np.copy(candidate)
-
-
-def gen_dyck_uniform(N, p):
-    dyck = []
-    for n in range(N):
-        dyck.append(dyck_sampler(geometric(p)))
-
-    return dyck
 
 

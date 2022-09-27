@@ -61,14 +61,22 @@ def run_transf_seq(num, filename, generator_function, **kwargs):
 
 
 if __name__ == '__main__':
-    N = 1000
-    run_seq(N, "dyck1_new", lb.make_dyck1_sets_geom,
-            **{"max_length": 200, "N": 1000, "reject_threshold": 200, "split_p": .795, "q": .5})
-    run_seq(N, "anbm_new", lb.make_anbm_sets,
-            **{"p":.01, "N":1000, "reject_threshold": 200, "split_p": .795})
-    run_seq(N, "abn_new", lb.make_abn_sets,
-            **{"p":.01, "N":1000, "reject_threshold": 200, "split_p": .795})
-    run_seq(N, "anbn_new", lb.make_anbn_sets,
-            **{"p":.01, "N":1000, "reject_threshold": 200, "split_p": .795})
+    N = 100
+    run_seq(N, "dyck1_small_lstm", lb.make_dyck1_sets_uniform,
+            **{"N": 1000, "p": .01, "reject_threshold": 200, "split_p": .795})
+    run_seq(N, "a2nb2m_small_lstm", lb.make_a2nb2m_sets,
+            **{"p":.01, "N": 1000, "reject_threshold": 200, "split_p": .795})
+    run_seq(N, "abn_small_lstm", lb.make_abn_sets,
+            **{"p":.01, "N": 1000, "reject_threshold": 200, "split_p": .795})
+    run_seq(N, "anbn_small_lstm", lb.make_anbn_sets,
+            **{"p":.01, "N": 1000, "reject_threshold": 200, "split_p": .795})
+    run_transf_seq(N, "dyck1_small_trans", lb.make_dyck1_sets_uniform,
+            **{"N": 1000, "p": .01, "reject_threshold": 200, "split_p": .795})
+    run_transf_seq(N, "a2nb2m_small_trans", lb.make_a2nb2m_sets,
+            **{"p": .01, "N": 1000, "reject_threshold": 200, "split_p": .795})
+    run_transf_seq(N, "abn_small_trans", lb.make_abn_sets,
+            **{"p": .01, "N": 1000, "reject_threshold": 200, "split_p": .795})
+    run_transf_seq(N, "anbn_small_trans", lb.make_anbn_sets,
+            **{"p": .01, "N": 1000, "reject_threshold": 200, "split_p": .795})
     #run(N, "anbnan", target_accuracies, lb.make_anbnan_io_cont_shuffled, **{"p": .1, "N": 1000})
     #run(N, "copy", target_accuracies, lb.make_double_abplus_io_cont_shuffled, **{"p": .1, "N": 1000})
