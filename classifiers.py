@@ -141,16 +141,13 @@ class LSTMSequencer(torch.nn.Module):
         )
         self.final_layer = torch.nn.Linear(hidden_sz, final_layer_sz)
         self.final_transform = torch.nn.Tanh()
-        self.out = torch.nn.Linear(final_layer_sz, output_sz)
-        self.out_f = torch.nn.Softmax(dim=-1)
+        self.out = torch.nn.Linear(final_layer_sz, alphabet_sz)
+        #self.out_f = torch.nn.Softmax(dim=-1)
         self.init_weights()
 
     def init_weights(self):
         for p in self.parameters():
-            if p.data.ndimension() >= 2:
-                torch.nn.init.normal_(p.data)
-            else:
-                torch.nn.init.zeros_(p.data)
+            torch.nn.init.normal_(p.data)
 
     def forward(self, x):
         #bs, seq_sz = x.size()
