@@ -54,7 +54,7 @@ def run_transf_seq(num, filename, generator_function, **kwargs):
                 language_set = generator_function(**kwargs)
                 print("Model %d" % (i + 1))
                 model = TransformerSequencer(4, 4, 2, 1, 4, 3)
-                for model_out, best_loss, percent_correct, epoch in seq_train(model, language_set, 512, 20, 10000):
+                for model_out, best_loss, percent_correct, epoch in seq_train(model, language_set, 256, 20, 10000):
                     weights = model_to_list(model_out)
                     writer_weights.writerow(weights)
                     writer_details.writerow([i+1, best_loss.item(), percent_correct.item(), epoch])
