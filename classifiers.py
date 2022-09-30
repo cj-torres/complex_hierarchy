@@ -598,6 +598,7 @@ def model_to_list(m):
     weight_list = []
     for l in m.parameters():
         weight_list.extend([w.item() for w in list(torch.flatten(l))])
+    return weight_list
 
 
 def load_as_tensor(file_name):
