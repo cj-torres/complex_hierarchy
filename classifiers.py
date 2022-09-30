@@ -442,7 +442,7 @@ def seq_transformers_train(model, language_set, batch_sz, mask_percent, incremen
     from math import ceil
     from random import sample
 
-    model.to("cuda")
+    #model#.to("cuda")
 
     ce_loss = torch.nn.CrossEntropyLoss()
 
@@ -452,13 +452,13 @@ def seq_transformers_train(model, language_set, batch_sz, mask_percent, incremen
     indxs = [i*batch_sz for i in range(batch_q)]
     indxs[-1] = indxs[-1] - batch_sz + batch_r
 
-    x_train = language_set.train_input.to("cuda")
-    y_train = language_set.train_input.to("cuda")
-    mask_train = language_set.train_mask.to("cuda")
+    x_train = language_set.train_input#.to("cuda")
+    y_train = language_set.train_input#.to("cuda")
+    mask_train = language_set.train_mask#.to("cuda")
 
-    x_test = language_set.test_input.to("cuda")
-    y_test = language_set.test_input.to("cuda")
-    mask_test = language_set.test_mask.to("cuda")
+    #x_test = language_set.test_input#.to("cuda")
+    #y_test = language_set.test_input#.to("cuda")
+    #mask_test = language_set.test_mask#.to("cuda")
     op = torch.optim.Adam(model.parameters(), lr=.0005, weight_decay=.05)
     best_loss = torch.tensor([float('inf')]).squeeze()
     #loss_test = torch.tensor([float('inf')]).squeeze()
@@ -474,8 +474,8 @@ def seq_transformers_train(model, language_set, batch_sz, mask_percent, incremen
         for param in model.parameters():
             param.grad = None
         x = x_train[batch].clone().to("cuda")
-        y = y_train[batch].to("cuda")
-        mask = torch.distributions.Bernoulli(mask_train[batch].to("cuda")*mask_percent).sample().type(torch.BoolTensor)
+        y = y_train[batch].clone().to("cuda")
+        mask = torch.distributions.Bernoulli(mask_train[batch]*mask_percent).sample().type(torch.BoolTensor).to("cuda")
         x[mask] = model.mask
         y_hat = model(x)
 
@@ -487,9 +487,12 @@ def seq_transformers_train(model, language_set, batch_sz, mask_percent, incremen
         op.step()
 
         with torch.no_grad():
+            x_test = language_set.test_input.to("cuda")
+            y_test = language_set.test_input.to("cuda")
+            mask_test = language_set.test_mask.to("cuda")
             x_test_masked = x_test.clone()
             test_mask = language_set.test_mask
-            mask = torch.distributions.Bernoulli(test_mask.to("cuda")*mask_percent).sample().type(torch.BoolTensor)
+            mask = torch.distributions.Bernoulli(test_mask*mask_percent).sample().type(torch.BoolTensor).to("cuda")
 
             x_test_masked[mask] = model.mask
 
@@ -497,6 +500,8 @@ def seq_transformers_train(model, language_set, batch_sz, mask_percent, incremen
             loss_test = ce_loss(y_test_hat[mask], y_test[mask])
 
             test_percent_correct = correct_guesses_seq(y_test, y_test_hat, mask_test)
+
+            del x_test, y_test, mask_test
 
         if loss_test >= best_loss:
             early_stop_counter += 1
