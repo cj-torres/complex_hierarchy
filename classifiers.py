@@ -370,13 +370,10 @@ def seq_train(model, language_set, batch_sz, increment, max_epochs, patience=20)
     indxs = [i*batch_sz for i in range(batch_q)]
     indxs[-1] = indxs[-1] - batch_sz + batch_r
 
-    x_train = language_set.train_input.to("cuda")
-    y_train = language_set.train_output.to("cuda")
-    mask_train = language_set.train_mask.to("cuda")
+    x_train = language_set.train_input #.to("cuda")
+    y_train = language_set.train_output #.to("cuda")
+    mask_train = language_set.train_mask #.to("cuda")
 
-    x_test = language_set.test_input.to("cuda")
-    y_test = language_set.test_output.to("cuda")
-    mask_test = language_set.test_mask.to("cuda")
     op = torch.optim.Adam(model.parameters(), lr=.0005, weight_decay=.05)
     best_loss = torch.tensor([float('inf')]).squeeze()
     #loss_test = torch.tensor([float('inf')]).squeeze()
@@ -404,6 +401,10 @@ def seq_train(model, language_set, batch_sz, increment, max_epochs, patience=20)
         op.step()
 
         with torch.no_grad():
+            x_test = language_set.test_input.to("cuda")
+            y_test = language_set.test_output.to("cuda")
+            mask_test = language_set.test_mask.to("cuda")
+
             y_test_hat = model(x_test)
             test_mask = language_set.test_mask
             loss_test = ce_loss(y_test_hat[test_mask], y_test[test_mask])
@@ -596,11 +597,7 @@ def set_normalize(x, y, lengths, r=1):
 def model_to_list(m):
     weight_list = []
     for l in m.parameters():
-        try:
-            weight_list.extend([w.item() for w in l.view(-1)])
-        except ValueError:
-            weight_list.extend([w.item() for c in l for w in c])
-    return weight_list
+        weight_list.extend([w.item() for w in list(torch.flatten(l))])
 
 
 def load_as_tensor(file_name):
