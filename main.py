@@ -60,7 +60,7 @@ def run_transf_seq(num, filename, generator_function, **kwargs):
                     writer_weights.writerow(weights)
                     encoding_cost = sum([1 / 2 * w ** 2 for w in weights])
                     writer_details.writerow([i+1, best_loss.item(), percent_correct.item(), epoch, encoding_cost])
-                    del model, model_out
+                    del model_out
 
 
 if __name__ == '__main__':
