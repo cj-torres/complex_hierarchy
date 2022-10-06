@@ -356,7 +356,7 @@ def branch_seq_train(model, language_set, target_loss, is_loss, batch_sz, max_ep
     return model, best_loss, percent_correct
 
 
-def seq_train(model, language_set, batch_sz, increment, max_epochs, patience=20):
+def seq_train(model, language_set, batch_sz, increment, max_epochs, patience=20, weight_decay=False):
     from math import ceil
     from random import sample
 
@@ -374,7 +374,10 @@ def seq_train(model, language_set, batch_sz, increment, max_epochs, patience=20)
     y_train = language_set.train_output #.to("cuda")
     mask_train = language_set.train_mask #.to("cuda")
 
-    op = torch.optim.Adam(model.parameters(), lr=.0005, weight_decay=.05)
+    if weight_decay:
+        op = torch.optim.Adam(model.parameters(), lr=.0005, weight_decay=.005)
+    else:
+        op = torch.optim.Adam(model.parameters(), lr=.0005)
     best_loss = torch.tensor([float('inf')]).squeeze()
     #loss_test = torch.tensor([float('inf')]).squeeze()
     percent_correct = 0
@@ -439,7 +442,7 @@ def seq_train(model, language_set, batch_sz, increment, max_epochs, patience=20)
     #return model, best_loss, percent_correct, epoch
 
 
-def seq_transformers_train(model, language_set, batch_sz, mask_percent, increment, max_epochs, patience=20):
+def seq_transformers_train(model, language_set, batch_sz, mask_percent, increment, max_epochs, patience=20, weight_decay=False):
     from math import ceil
     from random import sample
 
@@ -460,7 +463,10 @@ def seq_transformers_train(model, language_set, batch_sz, mask_percent, incremen
     #x_test = language_set.test_input#.to("cuda")
     #y_test = language_set.test_input#.to("cuda")
     #mask_test = language_set.test_mask#.to("cuda")
-    op = torch.optim.Adam(model.parameters(), lr=.0005, weight_decay=.05)
+    if weight_decay:
+        op = torch.optim.Adam(model.parameters(), lr=.0005, weight_decay=.005)
+    else:
+        op = torch.optim.Adam(model.parameters(), lr=.0005)
     best_loss = torch.tensor([float('inf')]).squeeze()
     #loss_test = torch.tensor([float('inf')]).squeeze()
     percent_correct = 0

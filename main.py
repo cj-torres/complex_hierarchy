@@ -33,7 +33,7 @@ def run_seq(num, filename, generator_function, **kwargs):
         with open(filename+"_loss.csv", 'w', newline='') as accuracy_file:
             writer_weights = csv.writer(model_weight_file)
             writer_details = csv.writer(accuracy_file)
-            writer_details.writerow(["model_num", "best_loss", "accuracy", "target", "epoch", "mdl"])
+            writer_details.writerow(["model_num", "best_loss", "accuracy", "epoch", "mdl"])
             for i in range(num):
                 language_set = generator_function(**kwargs)
                 print("Model %d" % (i + 1))
