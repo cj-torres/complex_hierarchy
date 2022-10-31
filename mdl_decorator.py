@@ -1,54 +1,80 @@
 import torch, math, types
 
-def l0_regularization(original_module: torch.nn.Module, lam: float,
-                      weight_decay: float = 0, is_neural: bool = False, *args, **kwargs):
-    # is_neural support only for models consisting of 1-d and 2-d tensors
-    # other support could be chaotic
-    module = original_module(*args, **kwargs)
 
-    module.pre_parameters = torch.nn.ParameterDict({name + "_p": param for name, param in module.named_parameters()})
-    module.mask_parameters = torch.nn.ParameterDict()
-    module.original_forward = module.forward
-    module.lam = lam
-    module.weight_decay = weight_decay
+class L0_Regularizer(torch.nn.Module):
 
-    if is_neural:
-        for name, param in module.pre_parameters.items():
-            if len(param.size()) == 2:
-                mask = torch.nn.Parameter(torch.Tensor(param.size()[0]))
-                module.mask_parameters.update({name + "_m": mask})
-    else:
-        for name, param in module.pre_parameters.items():
-            mask = torch.nn.Parameter(torch.Tensor(param.size()))
-            module.mask_parameters.update({name + "_m": mask})
-    ''' below code direct copy '''
+    def __init__(self, original_module: torch.nn.Module, lam: float,
+                      weight_decay: float = 0, is_neural: bool = False,
+                    temperature: float = 2/3, droprate_init=0.5,
+                 ):
+        # is_neural support only for models consisting of 1-d and 2-d tensors
+        # other support could be chaotic
+        super(L0_Regularizer, self).__init__()
+        self.module = original_module
+
+        self.pre_parameters = torch.nn.ParameterDict(
+            {name + "_p": param for name, param in self.module.named_parameters()}
+        )
+        self.is_neural = is_neural
+        self.mask_parameters = torch.nn.ParameterDict()
+        self.original_forward = self.forward
+        self.lam = lam
+        self.weight_decay = weight_decay
+        self.temperature = temperature
+        self.droprate_init = droprate_init
+
+        if is_neural:
+            for name, param in self.pre_parameters.items():
+                if len(param.size()) == 2:
+                    mask = torch.nn.Parameter(torch.Tensor(param.size()[0]))
+                    self.mask_parameters.update({name + "_m": mask})
+        else:
+            for name, param in self.pre_parameters.items():
+                mask = torch.nn.Parameter(torch.Tensor(param.size()))
+                self.mask_parameters.update({name + "_m": mask})
+
+    ''' 
+    Below code direct copy with adaptations from codebase for: 
+    
+    Louizos, C., Welling, M., & Kingma, D. P. (2017). 
+    Learning sparse neural networks through L_0 regularization. 
+    arXiv preprint arXiv:1712.01312.
+    '''
+
     def reset_parameters(self):
-        torch.nn.init.kaiming_normal(module.weights, mode='fan_out')
+        for name, weight in self.module.pre_parameters():
+            if "bias" in name:
+                torch.nn.init.constant(weight, 0.0)
+            else:
+                torch.nn.init.xavier_uniform(weight)
 
-        self.qz_loga.data.normal_(math.log(1 - self.droprate_init) - math.log(self.droprate_init), 1e-2)
+        for name, weight in self.module.mask_parameters():
+            torch.nn.init.normal(weight, math.log(1 - self.droprate_init) - math.log(self.droprate_init), 1e-2)
 
-        if self.use_bias:
-            self.bias.data.fill_(0)
 
-    def constrain_parameters(self, **kwargs):
-        self.qz_loga.data.clamp_(min=math.log(1e-2), max=math.log(1e2))
+    def constrain_parameters(self):
+        for name, weight in self.module.mask_parameters():
+            weight.data.clamp_(min=math.log(1e-2), max=math.log(1e2))
 
     def cdf_qz(self, x):
         """Implements the CDF of the 'stretched' concrete distribution"""
         xn = (x - limit_a) / (limit_b - limit_a)
         logits = math.log(xn) - math.log(1 - xn)
-        return F.sigmoid(logits * self.temperature - self.qz_loga).clamp(min=epsilon, max=1 - epsilon)
+        return torch.nn.functional.sigmoid(logits * self.temperature - self.qz_loga).clamp(min=epsilon, max=1 - epsilon)
 
     def quantile_concrete(self, x):
         """Implements the quantile, aka inverse CDF, of the 'stretched' concrete distribution"""
-        y = F.sigmoid((torch.log(x) - torch.log(1 - x) + self.qz_loga) / self.temperature)
+        y = torch.nn.functional.sigmoid((torch.log(x) - torch.log(1 - x) + self.qz_loga) / self.temperature)
         return y * (limit_b - limit_a) + limit_a
 
-    def _reg_w(self):
+    def _reg_w(self, param):
         """Expected L0 norm under the stochastic gates, takes into account and re-weights also a potential L2 penalty"""
-        logpw_col = torch.sum(- (.5 * self.prior_prec * self.weights.pow(2)) - self.lamba, 1)
-        logpw = torch.sum((1 - self.cdf_qz(0)) * logpw_col)
-        logpb = 0 if not self.use_bias else - torch.sum(.5 * self.prior_prec * self.bias.pow(2))
+        if self.is_neural:
+            logpw_col = torch.sum(- (.5 * self.weight_decay * self.param.pow(2)) - self.lam, 1)
+            logpw = torch.sum((1 - self.cdf_qz(0)) * logpw_col)
+            logpb = 0 if not self.use_bias else - torch.sum(.5 * self.prior_prec * self.bias.pow(2))
+        else:
+
         return logpw + logpb
 
     def regularization(self):
