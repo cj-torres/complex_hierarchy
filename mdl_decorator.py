@@ -1,6 +1,9 @@
 import torch, math, types
 
 
+
+
+
 class L0_Regularizer(torch.nn.Module):
 
     def __init__(self, original_module: torch.nn.Module, lam: float,
@@ -14,13 +17,12 @@ class L0_Regularizer(torch.nn.Module):
         self.module = original_module
 
         self.pre_parameters = torch.nn.ParameterDict(
-            {name + "_p": param for name, param in self.module.named_parameters()}
+            {name.replace(".", "#") + "_p": param for name, param in self.module.named_parameters()}
         )
 
-        self.param_names = [name for name, param in self.module.named_parameters()]
+        self.param_names = [name.replace(".", "#") for name, param in self.module.named_parameters()]
         self.is_neural = is_neural
         self.mask_parameters = torch.nn.ParameterDict()
-        self.module.original_forward = self.module.forward
         self.lam = lam
         self.weight_decay = weight_decay
         self.temperature = temperature
@@ -30,16 +32,23 @@ class L0_Regularizer(torch.nn.Module):
         self.epsilon = epsilon
 
         if is_neural:
-            for name, param in self.pre_parameters.items():
+            for name, param in self.module.named_parameters():
                 if len(param.size()) == 2:
                     mask = torch.nn.Parameter(torch.Tensor(param.size()[0]))
-                    self.mask_parameters.update({name + "_m": mask})
+                    self.mask_parameters.update({name.replace(".", "#") + "_m": mask})
 
         else:
-            for name, param in self.pre_parameters.items():
+            for name, param in self.module.named_parameters():
                 mask = torch.nn.Parameter(torch.Tensor(param.size()))
-                self.mask_parameters.update({name + "_m": mask})
+                self.mask_parameters.update({name.replace(".", "#") + "_m": mask})
 
+        # below code guts the module of its previous parameters,
+        # allowing them to be replaced by non-leaf tensors
+
+        for name in self.param_names:
+            L0_Regularizer.recursive_del(self.module, name)
+
+        self.reset_parameters()
     ''' 
     Below code direct copy with adaptations from codebase for: 
     
@@ -49,15 +58,14 @@ class L0_Regularizer(torch.nn.Module):
     '''
 
     def reset_parameters(self):
-        for name, weight in self.module.pre_parameters():
+        for name, weight in self.pre_parameters.items():
             if "bias" in name:
-                torch.nn.init.constant(weight, 0.0)
+                torch.nn.init.constant_(weight, 0.0)
             else:
-                torch.nn.init.xavier_uniform(weight)
+                torch.nn.init.xavier_uniform_(weight)
 
-        for name, weight in self.module.mask_parameters():
-            torch.nn.init.normal(weight, math.log(1 - self.droprate_init) - math.log(self.droprate_init), 1e-2)
-
+        for name, weight in self.mask_parameters.items():
+            torch.nn.init.normal_(weight, math.log(1 - self.droprate_init) - math.log(self.droprate_init), 1e-2)
 
     def constrain_parameters(self):
         for name, weight in self.module.mask_parameters():
@@ -65,7 +73,7 @@ class L0_Regularizer(torch.nn.Module):
 
     def cdf_qz(self, x, param):
         """Implements the CDF of the 'stretched' concrete distribution"""
-        '''references parameters'''
+        # references parameters
         xn = (x - self.limit_a) / (self.limit_b - self.limit_a)
         logits = math.log(xn) - math.log(1 - xn)
         return torch.nn.functional.sigmoid(
@@ -73,16 +81,16 @@ class L0_Regularizer(torch.nn.Module):
 
     def quantile_concrete(self, x, param):
         """Implements the quantile, aka inverse CDF, of the 'stretched' concrete distribution"""
-        '''references parameters'''
+        # references parameters
         y = torch.nn.functional.sigmoid(
             (torch.log(x) - torch.log(1 - x) + self.mask_parameters[param+"_m"]) / self.temperature)
         return y * (self.limit_b - self.limit_a) + self.limit_a
 
     def _reg_w(self, param):
         """Expected L0 norm under the stochastic gates, takes into account and re-weights also a potential L2 penalty"""
-        '''is_neural is old method, calculates wrt columns first multiplied by expected values of gates
+        """is_neural is old method, calculates wrt columns first multiplied by expected values of gates
            second method calculates wrt all parameters
-        '''
+        """
 
         # why is this negative? will investigate behavior at testing
         if self.is_neural:
@@ -116,37 +124,52 @@ class L0_Regularizer(torch.nn.Module):
     def get_eps(self, size):
         """Uniform random numbers for the concrete distribution"""
         # Variable deprecated and removed
-        eps = self.floatTensor(size).uniform_(self.epsilon, 1-self.epsilon)
+        eps = torch.FloatTensor(size).uniform_(self.epsilon, 1-self.epsilon)
         return eps
 
-    def sample_z(self, batch_size, sample=True):
+    def sample_z(self, batch_size, param, sample=True):
         """Sample the hard-concrete gates for training and use a deterministic value for testing"""
+        new_size = torch.Size([batch_size]) + self.mask_parameters[param+"_m"].size()
         if sample:
-            eps = self.get_eps(self.floatTensor(batch_size, self.in_features))
+            eps = self.get_eps(new_size)
             z = self.quantile_concrete(eps)
             return torch.nn.functional.hardtanh(z, min_val=0, max_val=1)
         else:  # mode
-            pi = torch.nn.functional.sigmoid(self.qz_loga).view(1, self.in_features).expand(batch_size, self.in_features)
+            pi = torch.sigmoid(self.mask_parameters[param+"_m"]).unsqueeze(dim=0).expand(new_size)
             return torch.nn.functional.hardtanh(pi * (self.limit_b - self.limit_a) + self.limit_a, min_val=0, max_val=1)
 
-    def sample_weights(self):
-        z = self.quantile_concrete(self.get_eps(self.floatTensor(self.in_features)))
-        mask = F.hardtanh(z, min_val=0, max_val=1)
-        return mask.view(self.in_features, 1) * self.weights
+    def sample_weights(self, param):
+        z = self.quantile_concrete(self.get_eps(self.mask_parameters[param+"_m"].size()), param)
+        mask = torch.nn.functional.hardtanh(z, min_val=0, max_val=1)
+        return mask * self.pre_parameters[param+"_p"]
 
     def forward(self, input):
-        if self.local_rep or not self.training:
-            z = self.sample_z(input.size(0), sample=self.training)
-            xin = input.mul(z)
-            output = xin.mm(self.weights)
+        """rewrite parameters (tensors) of core module and feedforward"""
+        for param in self.param_names:
+            L0_Regularizer.recursive_set(self.module, param, self.sample_weights(param))
+
+        return self.module(input)
+
+    @staticmethod
+    def recursive_get(obj, att_name):
+        if "#" in att_name:
+            first, last = att_name.split("#", 1)
+            L0_Regularizer.recursive_get(getattr(obj, first), last)
         else:
-            weights = self.sample_weights()
-            output = input.mm(weights)
-        if self.use_bias:
-            output.add_(self.bias)
-        return output
+            return getattr(obj, att_name)
 
-    def new_forward():
+    @staticmethod
+    def recursive_set(obj, att_name, val):
+        if "#" in att_name:
+            first, last = att_name.split("#", 1)
+            L0_Regularizer.recursive_set(getattr(obj, first), last, val)
+        else:
+            setattr(obj, att_name, val)
 
-
-    def forward():
+    @staticmethod
+    def recursive_del(obj, att_name):
+        if "#" in att_name:
+            first, last = att_name.split("#", 1)
+            L0_Regularizer.recursive_del(getattr(obj, first), last)
+        else:
+            delattr(obj, att_name)
