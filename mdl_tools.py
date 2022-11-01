@@ -1,9 +1,6 @@
 import torch, math, types
 
 
-
-
-
 class L0_Regularizer(torch.nn.Module):
 
     def __init__(self, original_module: torch.nn.Module, lam: float,
@@ -68,7 +65,7 @@ class L0_Regularizer(torch.nn.Module):
             torch.nn.init.normal_(weight, math.log(1 - self.droprate_init) - math.log(self.droprate_init), 1e-2)
 
     def constrain_parameters(self):
-        for name, weight in self.module.mask_parameters():
+        for name, weight in self.mask_parameters.items():
             weight.data.clamp_(min=math.log(1e-2), max=math.log(1e2))
 
     def cdf_qz(self, x, param):
@@ -76,13 +73,13 @@ class L0_Regularizer(torch.nn.Module):
         # references parameters
         xn = (x - self.limit_a) / (self.limit_b - self.limit_a)
         logits = math.log(xn) - math.log(1 - xn)
-        return torch.nn.functional.sigmoid(
+        return torch.sigmoid(
             logits * self.temperature - self.mask_parameters[param+"_m"]).clamp(min=self.epsilon, max=1 - self.epsilon)
 
     def quantile_concrete(self, x, param):
         """Implements the quantile, aka inverse CDF, of the 'stretched' concrete distribution"""
         # references parameters
-        y = torch.nn.functional.sigmoid(
+        y = torch.sigmoid(
             (torch.log(x) - torch.log(1 - x) + self.mask_parameters[param+"_m"]) / self.temperature)
         return y * (self.limit_b - self.limit_a) + self.limit_a
 
@@ -93,33 +90,27 @@ class L0_Regularizer(torch.nn.Module):
         """
 
         # why is this negative? will investigate behavior at testing
+        # reversed negative value, value should increase with description length
         if self.is_neural:
             logpw_col = torch.sum(- (.5 * self.weight_decay * self.pre_parameters[param+"_p"].pow(2)) - self.lam, 1)
             logpw = torch.sum((1 - self.cdf_qz(0, param)) * logpw_col)
         else:
-            logpw_l2 = - (.5 * self.weight_decay * param.pow(2)) - self.lam
+            logpw_l2 = - (.5 * self.weight_decay * self.pre_parameters[param+"_p"].pow(2)) - self.lam
             logpw = torch.sum((1 - self.cdf_qz(0, param)) * logpw_l2)
 
-        return logpw
+        return -logpw
 
     def regularization(self):
         r_total = torch.Tensor([])
         for param in self.param_names:
-            r_total = torch.cat([r_total, self._reg_w(param)])
+            r_total = torch.cat([r_total, self._reg_w(param).unsqueeze(dim=0)])
         return r_total.sum()
 
-    def count_expected_flops_and_l0(self):
-        """Measures the expected floating point operations (FLOPs) and the expected L0 norm"""
-        # dim_in multiplications and dim_in - 1 additions for each output neuron for the weights
-        # + the bias addition for each neuron
-        # total_flops = (2 * in_features - 1) * out_features + out_features
-        ppos = torch.sum(1 - self.cdf_qz(0))
-        expected_flops = (2 * ppos - 1) * self.out_features
-        expected_l0 = ppos * self.out_features
-        if self.use_bias:
-            expected_flops += self.out_features
-            expected_l0 += self.out_features
-        return expected_flops.data[0], expected_l0.data[0]
+    def count_l0(self):
+        total = []
+        for param in self.param_names:
+            total.append(torch.sum(1 - self.cdf_qz(0, param)).unsqueeze(dim=0))
+        return torch.cat(total).sum()
 
     def get_eps(self, size):
         """Uniform random numbers for the concrete distribution"""
@@ -173,3 +164,53 @@ class L0_Regularizer(torch.nn.Module):
             L0_Regularizer.recursive_del(getattr(obj, first), last)
         else:
             delattr(obj, att_name)
+
+
+""" UNIT TESTS """
+
+
+# 1 - element test
+def test_1():
+
+    in_tensors = torch.randn(500, 5)
+    target = torch.zeros_like(in_tensors)
+    target[:, 0] = in_tensors[:, 0]
+
+    model = L0_Regularizer(torch.nn.Linear(5, 5), .01)
+    opt = torch.optim.Adam(model.parameters())
+
+    for i in range(10000):
+        opt.zero_grad()
+        loss = ((model(in_tensors) - target).pow(2)).mean()
+        re_loss = model.regularization()
+
+        total = loss - re_loss
+
+        total.backward()
+        opt.step()
+        if i%100 == 0:
+            print(loss.item())
+            print(model.count_l0().item())
+
+
+# all-element test
+def test_2():
+
+    in_tensors = torch.randn(500, 5)
+    target = in_tensors.sum(dim=1).unsqueeze(dim=1).expand(-1, 5)
+
+    model = L0_Regularizer(torch.nn.Linear(5, 5), .01)
+    opt = torch.optim.Adam(model.parameters())
+
+    for i in range(10000):
+        opt.zero_grad()
+        loss = ((model(in_tensors) - target).pow(2)).mean()
+        re_loss = model.regularization()
+
+        total = loss - re_loss
+
+        total.backward()
+        opt.step()
+        if i%100 == 0:
+            print(loss.item())
+            print(model.count_l0().item())
