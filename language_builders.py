@@ -73,6 +73,21 @@ def to_continuation_tensors(set, continuation_function, dict_map = dict_map):
 
     return input, output, mask
 
+def to_continuation_duchon(set):
+    input = []
+    output = []
+    mask = []
+    for word in set:
+        input.append(word)
+        output.append(make_dyck1_continuation_duchon(word))
+        mask.append(torch.ones(len(word)))
+
+    input = torch.nn.utils.rnn.pad_sequence(input, batch_first=True).type(torch.LongTensor)
+    output = torch.nn.utils.rnn.pad_sequence(output, batch_first=True).type(torch.LongTensor)
+    mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True).type(torch.BoolTensor)
+
+    return input, output, mask
+
 
 def shuffler(language, split_percent, reject_size = 150):
     # returns training and testing sets with no overlap to prevent overfitting
@@ -281,6 +296,19 @@ def make_dyck1_continuation(w):
     return cont
 
 
+def make_dyck1_continuation_duchon(w):
+    # continuation function for duchon sets
+    cont = []
+    for i, c in enumerate(w):
+        a_count = (w[:i+1] == 2).sum().item()+1
+        b_count = (w[:i+1] == 3).sum().item()+1
+        if a_count == b_count:
+            cont.append(torch.Tensor([1, 1, 0]))
+        elif a_count > b_count:
+            cont.append(torch.Tensor([0, 1, 1]))
+    return torch.cat(cont)
+
+
 def make_dyck1_branch_sets(N, max_length, split_p, reject_threshold, p=.5, q=.25):
     dyck1 = gen_dyck1_words_redundant(N, max_length, p=p, q=q)
     dyck1_train_in, dyck1_test_in = shuffler(dyck1, split_p, reject_threshold)
@@ -352,6 +380,16 @@ def make_dyck1_sets_uniform(N, p, split_p, reject_threshold):
     dyck1_train_in, dyck1_test_in = shuffler(dyck1, split_p, reject_threshold)
     dyck1_train = to_tensors_duchon(dyck1_train_in)
     dyck1_test = to_tensors_duchon(dyck1_test_in)
+
+    return LanguageData(*dyck1_train + dyck1_test)
+
+def make_dyck1_sets_uniform_continuation(N, p, split_p, reject_threshold):
+    assert (split_p <= 1)
+    assert (N * (1 - split_p) >= reject_threshold)
+    dyck1 = gen_dyck_uniform(N, p)
+    dyck1_train_in, dyck1_test_in = shuffler(dyck1, split_p, reject_threshold)
+    dyck1_train = to_continuation_duchon(dyck1_train_in)
+    dyck1_test = to_continuation_duchon(dyck1_test_in)
 
     return LanguageData(*dyck1_train + dyck1_test)
 
