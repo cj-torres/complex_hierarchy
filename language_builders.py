@@ -43,6 +43,7 @@ def to_tensors(set, dict_map = dict_map):
 
     return input, output, mask
 
+
 def to_tensors_duchon(set):
     # for tensors generated with Duchon algorithm (already mapped)
     input = []
@@ -58,6 +59,7 @@ def to_tensors_duchon(set):
 
     return input, output, mask
 
+
 def to_continuation_tensors(set, continuation_function, dict_map = dict_map):
     input = []
     output = []
@@ -72,6 +74,7 @@ def to_continuation_tensors(set, continuation_function, dict_map = dict_map):
     mask = torch.nn.utils.rnn.pad_sequence(mask, batch_first=True).type(torch.BoolTensor)
 
     return input, output, mask
+
 
 def to_continuation_duchon(set):
     input = []
@@ -117,6 +120,7 @@ def shuffler(language, split_percent, reject_size = 150):
     return shuffled_lang_train, shuffled_lang_test
 
 ### Language checkers, good for troubleshooting ###
+
 
 def anbn_checker(string):
     counter = 0
@@ -306,7 +310,7 @@ def make_dyck1_continuation_duchon(w):
             cont.append(torch.Tensor([1, 1, 0]))
         elif a_count > b_count:
             cont.append(torch.Tensor([0, 1, 1]))
-    return torch.cat(cont)
+    return torch.stack(cont)
 
 
 def make_dyck1_branch_sets(N, max_length, split_p, reject_threshold, p=.5, q=.25):
@@ -383,6 +387,7 @@ def make_dyck1_sets_uniform(N, p, split_p, reject_threshold):
 
     return LanguageData(*dyck1_train + dyck1_test)
 
+
 def make_dyck1_sets_uniform_continuation(N, p, split_p, reject_threshold):
     assert (split_p <= 1)
     assert (N * (1 - split_p) >= reject_threshold)
@@ -432,6 +437,8 @@ def make_anbn_continuation(w):
 
 
 def make_anbn_branch_sets(N, p, split_p, reject_threshold):
+    assert (split_p <= 1)
+    assert (N * (1 - split_p) >= reject_threshold)
     anbn = gen_anbn_words_redundant(N, p)
     anbn_train_in, anbn_test_in = shuffler(anbn, split_p, reject_threshold)
     anbn_train = to_continuation_tensors(anbn_train_in, make_anbn_continuation)
@@ -504,18 +511,37 @@ def gen_a2nb2m_words_redundant(N, p):
     return anbm
 
 
+def make_a2nb2m_continuation(w):
+    length = len(w)-1
+    n = len(w.replace("b", ""))-1
+    m = length - n
+    cont = [[1, 1, 1]]+[[1, 1, 1]] * n + [[1, 0, 1]] * m
+    return cont
+
+
 def make_a2nb2m_sets(N, p, split_p, reject_threshold):
     # generates N words in anbm with n and m sampled from a geometric distribution
     # p geometric probability
     # mean of geometric is 1/p
     assert(split_p <= 1)
     assert(N*(1-split_p) >= reject_threshold)
-    anbm = gen_a2nb2m_words_redundant(N, p)
-    anbm_train_in, anbm_test_in = shuffler(anbm, split_p, reject_threshold)
-    anbm_train = to_tensors(anbm_train_in)
-    anbm_test = to_tensors(anbm_test_in)
+    a2nb2m = gen_a2nb2m_words_redundant(N, p)
+    a2nb2m_train_in, a2nb2m_test_in = shuffler(a2nb2m, split_p, reject_threshold)
+    a2nb2m_train = to_tensors(a2nb2m_train_in)
+    a2nb2m_test = to_tensors(a2nb2m_test_in)
 
-    return LanguageData(*anbm_train+anbm_test)
+    return LanguageData(*a2nb2m_train+a2nb2m_test)
+
+
+def make_a2nb2m_branch_sets(N, p, split_p, reject_threshold):
+    assert (split_p <= 1)
+    assert (N * (1 - split_p) >= reject_threshold)
+    a2nb2m = gen_a2nb2m_words_redundant(N, p)
+    a2nb2m_train_in, a2nb2m_test_in = shuffler(a2nb2m, split_p, reject_threshold)
+    a2nb2m_train = to_continuation_tensors(a2nb2m_train_in, make_anbm_continuation)
+    a2nb2m_test = to_continuation_tensors(a2nb2m_test_in, make_anbm_continuation)
+
+    return LanguageData(*a2nb2m_train + a2nb2m_test)
 
 
 
@@ -558,6 +584,8 @@ def make_abn_continuation(w):
 
 
 def make_abn_branch_sets(N, p, split_p, reject_threshold):
+    assert (split_p <= 1)
+    assert (N * (1 - split_p) >= reject_threshold)
     abn = gen_abn_words_redundant(N, p)
     abn_train_in, abn_test_in = shuffler(abn, split_p, reject_threshold)
     abn_train = to_continuation_tensors(abn_train_in, make_abn_continuation)

@@ -1,4 +1,4 @@
-import torch, math, types
+import torch, math, types, copy
 
 
 class L0_Regularizer(torch.nn.Module):
@@ -11,7 +11,7 @@ class L0_Regularizer(torch.nn.Module):
         # is_neural support only for models consisting of 1-d and 2-d tensors
         # other support could be chaotic
         super(L0_Regularizer, self).__init__()
-        self.module = original_module
+        self.module = copy.deepcopy(original_module)
 
         self.pre_parameters = torch.nn.ParameterDict(
             {name.replace(".", "#") + "_p": param for name, param in self.module.named_parameters()}
@@ -42,10 +42,17 @@ class L0_Regularizer(torch.nn.Module):
         # below code guts the module of its previous parameters,
         # allowing them to be replaced by non-leaf tensors
 
+        self.reset_parameters()
+
         for name in self.param_names:
             L0_Regularizer.recursive_del(self.module, name)
+            L0_Regularizer.recursive_set(self.module, name, self.sample_weights(name))
 
-        self.reset_parameters()
+        for param in self.parameters():
+            if param.isnan().any():
+                print(param)
+
+
     ''' 
     Below code direct copy with adaptations from codebase for: 
     
@@ -103,7 +110,8 @@ class L0_Regularizer(torch.nn.Module):
     def regularization(self):
         r_total = torch.Tensor([])
         for param in self.param_names:
-            r_total = torch.cat([r_total, self._reg_w(param).unsqueeze(dim=0)])
+            device = self.mask_parameters[param+"_m"].device
+            r_total = torch.cat([r_total.to(device), self._reg_w(param).unsqueeze(dim=0)])
         return r_total.sum()
 
     def count_l0(self):
@@ -115,14 +123,15 @@ class L0_Regularizer(torch.nn.Module):
     def get_eps(self, size):
         """Uniform random numbers for the concrete distribution"""
         # Variable deprecated and removed
-        eps = torch.FloatTensor(size).uniform_(self.epsilon, 1-self.epsilon)
+        eps = torch.rand(size)*(1-2*self.epsilon)+self.epsilon
         return eps
 
     def sample_z(self, batch_size, param, sample=True):
         """Sample the hard-concrete gates for training and use a deterministic value for testing"""
         new_size = torch.Size([batch_size]) + self.mask_parameters[param+"_m"].size()
+        device = self.mask_parameters[param+"_m"].device
         if sample:
-            eps = self.get_eps(new_size)
+            eps = self.get_eps(new_size).to(device)
             z = self.quantile_concrete(eps)
             return torch.nn.functional.hardtanh(z, min_val=0, max_val=1)
         else:  # mode
@@ -130,7 +139,8 @@ class L0_Regularizer(torch.nn.Module):
             return torch.nn.functional.hardtanh(pi * (self.limit_b - self.limit_a) + self.limit_a, min_val=0, max_val=1)
 
     def sample_weights(self, param):
-        z = self.quantile_concrete(self.get_eps(self.mask_parameters[param+"_m"].size()), param)
+        device = self.mask_parameters[param + "_m"].device
+        z = self.quantile_concrete(self.get_eps(self.mask_parameters[param+"_m"].size()).to(device), param)
         mask = torch.nn.functional.hardtanh(z, min_val=0, max_val=1)
         return mask * self.pre_parameters[param+"_p"]
 
@@ -138,6 +148,11 @@ class L0_Regularizer(torch.nn.Module):
         """rewrite parameters (tensors) of core module and feedforward"""
         for param in self.param_names:
             L0_Regularizer.recursive_set(self.module, param, self.sample_weights(param))
+
+        #out = self.module(input)
+
+        #for param in self.param_names:
+        #    L0_Regularizer.recursive_set(self.module, self.pre_parameters[param+"_p"].clone())
 
         return self.module(input)
 

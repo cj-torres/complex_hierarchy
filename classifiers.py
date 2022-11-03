@@ -7,6 +7,7 @@ import csv
 from random import shuffle
 from random import sample
 import torch
+import mdl_tools as mdl
 
 
 def random_love_note():
@@ -277,11 +278,13 @@ def train(model, x_train, y_train, lengths_train, x_test, y_test, lengths_test, 
     return model, best_loss
 
 
-def branch_seq_train(model, language_set, target_loss, is_loss, batch_sz, max_epochs, increment, patience=20):
+def branch_seq_train(model, language_set, target_loss, is_loss, batch_sz, max_epochs, increment, patience=20,
+                     l0_regularized=False, lam=.05):
     from math import ceil
     from random import sample
 
-
+    if l0_regularized:
+        model = mdl.L0_Regularizer(model, lam)
 
     model.to("cuda")
 
@@ -291,13 +294,9 @@ def branch_seq_train(model, language_set, target_loss, is_loss, batch_sz, max_ep
     indxs = [i*batch_sz for i in range(batch_q)]
     indxs[-1] = indxs[-1] - batch_sz + batch_r
 
-    x_train = language_set.train_input.to("cuda")
-    y_train = language_set.train_output.to("cuda")
-    mask_train = language_set.train_mask.to("cuda")
-
-    x_test = language_set.test_input.to("cuda")
-    y_test = language_set.test_output.to("cuda")
-    mask_test = language_set.test_mask.to("cuda")
+    x_train = language_set.train_input#.to("cuda")
+    y_train = language_set.train_output#.to("cuda")
+    mask_train = language_set.train_mask#.to("cuda")
 
     op = torch.optim.Adam(model.parameters(), lr=.0005)
     best_loss = torch.tensor([float('inf')]).squeeze()
@@ -309,6 +308,7 @@ def branch_seq_train(model, language_set, target_loss, is_loss, batch_sz, max_ep
     train_percent_correct = 0
     test_percent_correct = 0
     epoch = 0
+    size = 0
     while (is_loss and loss_test > target_loss) or ((not is_loss) and test_percent_correct < target_loss) and epoch < max_epochs:
         batch = torch.tensor(sample(indices, batch_sz)).type(torch.LongTensor)
         for param in model.parameters():
@@ -317,18 +317,34 @@ def branch_seq_train(model, language_set, target_loss, is_loss, batch_sz, max_ep
         y = y_train[batch].to("cuda")
         mask = mask_train[batch].to("cuda")
         y_hat = model(x)
-        loss = bernoulli_loss_cont(y_hat, y)
+        loss = bernoulli_loss_cont(y, y_hat, mask)
+
+        #breakpoint()
+
+        if l0_regularized:
+            re_loss = model.regularization()
+            loss = loss + re_loss
         loss.backward()
         train_percent_correct = correct_guesses_batch_seq(y, y_hat, mask)
+
         del mask, x, y
 
         op.step()
 
+        if l0_regularized:
+            model.constrain_parameters()
+
         with torch.no_grad():
+            x_test = language_set.test_input.to("cuda")
+            y_test = language_set.test_output.to("cuda")
+            mask_test = language_set.test_mask.to("cuda")
+
             y_test_hat = model(x_test)
             loss_test = bernoulli_loss_cont(y_test, y_test_hat, mask_test)
 
             test_percent_correct = correct_guesses_batch_seq(y_test, y_test_hat, mask_test)
+
+            del x_test, y_test, mask_test
 
         if loss_test >= best_loss:
             early_stop_counter += 1
@@ -342,8 +358,11 @@ def branch_seq_train(model, language_set, target_loss, is_loss, batch_sz, max_ep
             early_stop_counter = 0
             percent_correct = test_percent_correct
             torch.save(model.state_dict(), "best_net_cache.ptr")
-        print("Accuracy: %s, loss: %s, counter: %d, train accuracy: %s" %
-              (percent_correct.item(), loss_test.item(), early_stop_counter, train_percent_correct.item()))
+        if l0_regularized:
+            size = model.count_l0()
+        print("Accuracy: %s, loss: %s, counter: %d, train accuracy: %s, network size: %s" %
+              (percent_correct.item(), loss_test.item(), early_stop_counter, train_percent_correct.item(),
+               size.item()))
 
         if epoch % increment == 0:
             yield model, best_loss, percent_correct
