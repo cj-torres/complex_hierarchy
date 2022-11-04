@@ -175,6 +175,7 @@ def test_1(n):
 
     model = L0_Regularizer(torch.nn.Linear(n, n), .01)
     opt = torch.optim.Adam(model.parameters())
+    model.train()
 
     for i in range(10000):
         opt.zero_grad()
@@ -189,6 +190,9 @@ def test_1(n):
             print(loss.item())
             print(model.count_l0().item())
 
+    model.eval()
+    print((model(in_tensors) - target).pow(2).mean().item())
+
 
 # all-element test (n^2)
 def test_2(n):
@@ -197,6 +201,7 @@ def test_2(n):
     target = in_tensors.sum(dim=1).unsqueeze(dim=1).expand(-1, n)
 
     model = L0_Regularizer(torch.nn.Linear(n, n), .01)
+    model.train()
     opt = torch.optim.Adam(model.parameters())
 
     for i in range(10000):
@@ -211,6 +216,9 @@ def test_2(n):
         if i%100 == 0:
             print(loss.item())
             print(model.count_l0().item())
+
+    model.eval()
+    print((model(in_tensors) - target).pow(2).mean().item())
 
 # identity test (n)
 def test_3(n):
@@ -221,6 +229,8 @@ def test_3(n):
     model = L0_Regularizer(torch.nn.Linear(n, n), .01)
     opt = torch.optim.Adam(model.parameters())
 
+    model.train()
+
     for i in range(10000):
         opt.zero_grad()
         loss = ((model(in_tensors) - target).pow(2)).mean()
@@ -233,3 +243,6 @@ def test_3(n):
         if i%100 == 0:
             print(loss.item())
             print(model.count_l0().item())
+
+    model.eval()
+    print((model(in_tensors) - target).pow(2).mean().item())
