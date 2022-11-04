@@ -58,6 +58,8 @@ def regularized_branch(num, filename, generator_function, lambdas, epochs, **kwa
                 model = LSTMBranchSequencer(4, 3, 5, 5, 3)
                 for model_out, loss, percent_correct, epoch in branch_seq_train(model, language_set, 256, epochs, 25,
                                                                                 l0_regularized=True, lam=lam):
+                    if loss.isnan().any():
+                        break
                     weights = model_to_list(model_out)
                     with torch.no_grad():
                         l2 = sum([1 / 2 * w ** 2 for w in weights])
