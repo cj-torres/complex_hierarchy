@@ -3,10 +3,8 @@ import torch, math, types, copy
 
 class L0_Regularizer(torch.nn.Module):
 
-    def __init__(self, original_module: torch.nn.Module, lam: float,
-                      weight_decay: float = 0, is_neural: bool = False,
-                    temperature: float = 2/3, droprate_init=0.5,
-                 limit_a = -.1, limit_b = 1.1, epsilon = 1e-6
+    def __init__(self, original_module: torch.nn.Module, lam: float, weight_decay: float = 0,
+                 temperature: float = 2/3, droprate_init=0.2, limit_a=-.1, limit_b=1.1, epsilon=1e-6
                  ):
         # is_neural support only for models consisting of 1-d and 2-d tensors
         # other support could be chaotic
@@ -18,7 +16,6 @@ class L0_Regularizer(torch.nn.Module):
         )
 
         self.param_names = [name.replace(".", "#") for name, param in self.module.named_parameters()]
-        self.is_neural = is_neural
         self.mask_parameters = torch.nn.ParameterDict()
         self.lam = lam
         self.weight_decay = weight_decay
@@ -28,16 +25,12 @@ class L0_Regularizer(torch.nn.Module):
         self.limit_b = limit_b
         self.epsilon = epsilon
 
-        if is_neural:
-            for name, param in self.module.named_parameters():
-                if len(param.size()) == 2:
-                    mask = torch.nn.Parameter(torch.Tensor(param.size()[0]))
-                    self.mask_parameters.update({name.replace(".", "#") + "_m": mask})
 
-        else:
-            for name, param in self.module.named_parameters():
-                mask = torch.nn.Parameter(torch.Tensor(param.size()))
-                self.mask_parameters.update({name.replace(".", "#") + "_m": mask})
+
+
+        for name, param in self.module.named_parameters():
+            mask = torch.nn.Parameter(torch.Tensor(param.size()))
+            self.mask_parameters.update({name.replace(".", "#") + "_m": mask})
 
         # below code guts the module of its previous parameters,
         # allowing them to be replaced by non-leaf tensors
@@ -98,12 +91,8 @@ class L0_Regularizer(torch.nn.Module):
 
         # why is this negative? will investigate behavior at testing
         # reversed negative value, value should increase with description length
-        if self.is_neural:
-            logpw_col = torch.sum(- (.5 * self.weight_decay * self.pre_parameters[param+"_p"].pow(2)) - self.lam, 1)
-            logpw = torch.sum((1 - self.cdf_qz(0, param)) * logpw_col)
-        else:
-            logpw_l2 = - (.5 * self.weight_decay * self.pre_parameters[param+"_p"].pow(2)) - self.lam
-            logpw = torch.sum((1 - self.cdf_qz(0, param)) * logpw_l2)
+        logpw_l2 = - (.5 * self.weight_decay * self.pre_parameters[param+"_p"].pow(2)) - self.lam
+        logpw = torch.sum((1 - self.cdf_qz(0, param)) * logpw_l2)
 
         return -logpw
 
@@ -126,33 +115,26 @@ class L0_Regularizer(torch.nn.Module):
         eps = torch.rand(size)*(1-2*self.epsilon)+self.epsilon
         return eps
 
-    def sample_z(self, batch_size, param, sample=True):
+    def sample_z(self, param, sample=True):
         """Sample the hard-concrete gates for training and use a deterministic value for testing"""
-        new_size = torch.Size([batch_size]) + self.mask_parameters[param+"_m"].size()
-        device = self.mask_parameters[param+"_m"].device
+        size = self.mask_parameters[param+"_m"].size()
         if sample:
-            eps = self.get_eps(new_size).to(device)
-            z = self.quantile_concrete(eps)
+            device = self.mask_parameters[param + "_m"].device
+            eps = self.get_eps(size).to(device)
+            z = self.quantile_concrete(eps, param)
             return torch.nn.functional.hardtanh(z, min_val=0, max_val=1)
         else:  # mode
-            pi = torch.sigmoid(self.mask_parameters[param+"_m"]).unsqueeze(dim=0).expand(new_size)
+            pi = torch.sigmoid(self.mask_parameters[param+"_m"]).unsqueeze(dim=0).expand(size)
             return torch.nn.functional.hardtanh(pi * (self.limit_b - self.limit_a) + self.limit_a, min_val=0, max_val=1)
 
-    def sample_weights(self, param):
-        device = self.mask_parameters[param + "_m"].device
-        z = self.quantile_concrete(self.get_eps(self.mask_parameters[param+"_m"].size()).to(device), param)
-        mask = torch.nn.functional.hardtanh(z, min_val=0, max_val=1)
+    def sample_weights(self, param, sample=True):
+        mask = self.sample_z(param, sample)
         return mask * self.pre_parameters[param+"_p"]
 
     def forward(self, input):
         """rewrite parameters (tensors) of core module and feedforward"""
         for param in self.param_names:
-            L0_Regularizer.recursive_set(self.module, param, self.sample_weights(param))
-
-        #out = self.module(input)
-
-        #for param in self.param_names:
-        #    L0_Regularizer.recursive_set(self.module, self.pre_parameters[param+"_p"].clone())
+            L0_Regularizer.recursive_set(self.module, param, self.sample_weights(param, sample=self.training))
 
         return self.module(input)
 
@@ -181,17 +163,17 @@ class L0_Regularizer(torch.nn.Module):
             delattr(obj, att_name)
 
 
-""" UNIT TESTS """
+""" MODEL TESTS """
 
 
 # 1 - element test
-def test_1():
+def test_1(n):
 
-    in_tensors = torch.randn(500, 5)
+    in_tensors = torch.randn(500, n)
     target = torch.zeros_like(in_tensors)
     target[:, 0] = in_tensors[:, 0]
 
-    model = L0_Regularizer(torch.nn.Linear(5, 5), .01)
+    model = L0_Regularizer(torch.nn.Linear(n, n), .01)
     opt = torch.optim.Adam(model.parameters())
 
     for i in range(10000):
@@ -199,7 +181,7 @@ def test_1():
         loss = ((model(in_tensors) - target).pow(2)).mean()
         re_loss = model.regularization()
 
-        total = loss - re_loss
+        total = loss + re_loss
 
         total.backward()
         opt.step()
@@ -208,13 +190,13 @@ def test_1():
             print(model.count_l0().item())
 
 
-# all-element test
-def test_2():
+# all-element test (n^2)
+def test_2(n):
 
-    in_tensors = torch.randn(500, 5)
-    target = in_tensors.sum(dim=1).unsqueeze(dim=1).expand(-1, 5)
+    in_tensors = torch.randn(500, n)
+    target = in_tensors.sum(dim=1).unsqueeze(dim=1).expand(-1, n)
 
-    model = L0_Regularizer(torch.nn.Linear(5, 5), .01)
+    model = L0_Regularizer(torch.nn.Linear(n, n), .01)
     opt = torch.optim.Adam(model.parameters())
 
     for i in range(10000):
@@ -222,7 +204,29 @@ def test_2():
         loss = ((model(in_tensors) - target).pow(2)).mean()
         re_loss = model.regularization()
 
-        total = loss - re_loss
+        total = loss + re_loss
+
+        total.backward()
+        opt.step()
+        if i%100 == 0:
+            print(loss.item())
+            print(model.count_l0().item())
+
+# identity test (n)
+def test_3(n):
+
+    in_tensors = torch.randn(500, n)
+    target = in_tensors
+
+    model = L0_Regularizer(torch.nn.Linear(n, n), .01)
+    opt = torch.optim.Adam(model.parameters())
+
+    for i in range(10000):
+        opt.zero_grad()
+        loss = ((model(in_tensors) - target).pow(2)).mean()
+        re_loss = model.regularization()
+
+        total = loss + re_loss
 
         total.backward()
         opt.step()
