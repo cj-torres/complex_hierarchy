@@ -1,4 +1,4 @@
-import torch, math, types, copy
+import torch, math, copy
 
 
 class L0_Regularizer(torch.nn.Module):
@@ -40,10 +40,6 @@ class L0_Regularizer(torch.nn.Module):
         for name in self.param_names:
             L0_Regularizer.recursive_del(self.module, name)
             L0_Regularizer.recursive_set(self.module, name, self.sample_weights(name))
-
-        for param in self.parameters():
-            if param.isnan().any():
-                print(param)
 
 
     ''' 
@@ -124,7 +120,7 @@ class L0_Regularizer(torch.nn.Module):
             z = self.quantile_concrete(eps, param)
             return torch.nn.functional.hardtanh(z, min_val=0, max_val=1)
         else:  # mode
-            pi = torch.sigmoid(self.mask_parameters[param+"_m"]).unsqueeze(dim=0).expand(size)
+            pi = torch.sigmoid(self.mask_parameters[param+"_m"])
             return torch.nn.functional.hardtanh(pi * (self.limit_b - self.limit_a) + self.limit_a, min_val=0, max_val=1)
 
     def sample_weights(self, param, sample=True):
