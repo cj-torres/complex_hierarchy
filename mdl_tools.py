@@ -6,8 +6,6 @@ class L0_Regularizer(torch.nn.Module):
     def __init__(self, original_module: torch.nn.Module, lam: float, weight_decay: float = 0,
                  temperature: float = 2/3, droprate_init=0.2, limit_a=-.1, limit_b=1.1, epsilon=1e-6
                  ):
-        # is_neural support only for models consisting of 1-d and 2-d tensors
-        # other support could be chaotic
         super(L0_Regularizer, self).__init__()
         self.module = copy.deepcopy(original_module)
 
@@ -24,9 +22,6 @@ class L0_Regularizer(torch.nn.Module):
         self.limit_a = limit_a
         self.limit_b = limit_b
         self.epsilon = epsilon
-
-
-
 
         for name, param in self.module.named_parameters():
             mask = torch.nn.Parameter(torch.Tensor(param.size()))

@@ -18,7 +18,7 @@ def run_branch(num, filename, target_accuracies, generator_function, **kwargs):
                 language_set = generator_function(**kwargs)
                 print("Model %d" % (i + 1))
                 model = LSTMBranchSequencer(4, 2, 4, 4, 3)
-                model, best_loss, percent_correct = seq_train(model, language_set, target, False, 256)
+                model, best_loss, percent_correct = seq_train(model, language_set, 256, 6000, 25)
                 weights = model_to_list(model)
                 writer.writerow(weights)
                 accuracy.append([best_loss.item(), percent_correct.item(), target])
@@ -26,6 +26,30 @@ def run_branch(num, filename, target_accuracies, generator_function, **kwargs):
             writer = csv.writer(accuracy_file)
             writer.writerow(["best_loss", "accuracy", "target"])
             writer.writerows(accuracy)
+
+
+def regularized_branch(num, filename, generator_function, lambdas, epochs, **kwargs):
+    # runs trials of branch sequencers (tries to predict correct possible continuations)
+    # must accept branch sequencer language set
+    #with open(filename+".csv", 'w', newline='') as model_weight_file:
+    with open(filename+"_loss.csv", 'w', newline='') as accuracy_file:
+        #writer_weights = csv.writer(model_weight_file)
+        writer_details = csv.writer(accuracy_file)
+        writer_details.writerow(["model_num", "loss", "accuracy", "epoch", "l2", "l0", "re loss"])
+        for lam in lambdas:
+            for i in range(num):
+                language_set = generator_function(**kwargs)
+                print("Model %d" % (i + 1))
+                model = LSTMBranchSequencer(4, 2, 4, 4, 3)
+                for model_out, loss, percent_correct, epoch in branch_seq_train(model, language_set, 256, epochs, 25,
+                                                                                l0_regularized=True, lam=lam):
+                    weights = model_to_list(model_out)
+                        #writer_weights.writerow(weights)
+                    with torch.no_grad():
+                        l2 = sum([1 / 2 * w ** 2 for w in weights])
+                        l0 = model.count_l0
+                        re_loss = model.regularization()
+                    writer_details.writerow([i + 1, loss.item(), percent_correct.item(), epoch, l2, l0, re_loss])
 
 
 def run_seq(num, filename, generator_function, weight_decay=False, **kwargs):
@@ -67,32 +91,64 @@ def run_transf_seq(num, filename, generator_function, **kwargs):
 if __name__ == '__main__':
     from datetime import date
     import os
-    N = 100
+    N = 10
+    lambdas = [.01, .05, .1, .2, .25, .3, .5, .75, 1]
     new_dir = "Output-{}".format(str(date.today()))
     os.mkdir(new_dir)
-    run_seq(N, "{}/dyck1_small_lstm".format(new_dir), lb.make_dyck1_sets_uniform,
+
+    regularized_branch(N, "{}/dyck1_small_lstm".format(new_dir), lb.make_dyck1_sets_uniform, lambdas, 7500,
             **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
-    run_seq(N, "{}/a2nb2m_small_lstm".format(new_dir), lb.make_a2nb2m_sets,
-            **{"p":.05, "N": 1000, "reject_threshold": 200, "split_p": .795})
-    run_seq(N, "{}/abn_small_lstm".format(new_dir), lb.make_abn_sets,
-            **{"p":.05, "N": 1000, "reject_threshold": 200, "split_p": .795})
-    run_seq(N, "{}/anbn_small_lstm".format(new_dir), lb.make_anbn_sets,
-            **{"p":.05, "N": 1000, "reject_threshold": 200, "split_p": .795})
-    run_seq(N, "{}/dyck1_small_lstm_wd".format(new_dir), lb.make_dyck1_sets_uniform, weight_decay=True,
-            **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
-    run_seq(N, "{}/a2nb2m_small_lstm_wd".format(new_dir), lb.make_a2nb2m_sets, weight_decay=True,
+    regularized_branch(N, "{}/a2nb2m_small_lstm".format(new_dir), lb.make_a2nb2m_sets, lambdas, 7500,
             **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
-    run_seq(N, "{}/abn_small_lstm_wd".format(new_dir), lb.make_abn_sets, weight_decay=True,
+    regularized_branch(N, "{}/abn_small_lstm".format(new_dir), lb.make_abn_sets, lambdas, 7500,
             **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
-    run_seq(N, "{}/anbn_small_lstm_wd".format(new_dir), lb.make_anbn_sets, weight_decay=True,
+    regularized_branch(N, "{}/anbn_small_lstm".format(new_dir), lb.make_anbn_sets, lambdas, 7500,
             **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
-    run_transf_seq(N, "{}/dyck1_small_trans".format(new_dir), lb.make_dyck1_sets_uniform,
-            **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
-    run_transf_seq(N, "{}/a2nb2m_small_trans".format(new_dir), lb.make_a2nb2m_sets,
-            **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
-    run_transf_seq(N, "{}/abn_small_trans".format(new_dir), lb.make_abn_sets,
-            **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
-    run_transf_seq(N, "{}/anbn_small_trans".format(new_dir), lb.make_anbn_sets,
-            **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
+
+
+
+
+
+
+
+
+
+
+
+
+
+    #run_seq(N, "{}/dyck1_small_lstm_wd".format(new_dir), lb.make_dyck1_sets_uniform, weight_decay=True,
+    #        **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+    #run_seq(N, "{}/a2nb2m_small_lstm_wd".format(new_dir), lb.make_a2nb2m_sets, weight_decay=True,
+    #        **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
+
+
+
+
+    # old runs
+    # run_seq(N, "{}/dyck1_small_lstm".format(new_dir), lb.make_dyck1_sets_uniform,
+    #         **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+    # run_seq(N, "{}/a2nb2m_small_lstm".format(new_dir), lb.make_a2nb2m_sets,
+    #         **{"p":.05, "N": 1000, "reject_threshold": 200, "split_p": .795})
+    # run_seq(N, "{}/abn_small_lstm".format(new_dir), lb.make_abn_sets,
+    #         **{"p":.05, "N": 1000, "reject_threshold": 200, "split_p": .795})
+    # run_seq(N, "{}/anbn_small_lstm".format(new_dir), lb.make_anbn_sets,
+    #         **{"p":.05, "N": 1000, "reject_threshold": 200, "split_p": .795})
+    # run_seq(N, "{}/dyck1_small_lstm_wd".format(new_dir), lb.make_dyck1_sets_uniform, weight_decay=True,
+    #         **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+    # run_seq(N, "{}/a2nb2m_small_lstm_wd".format(new_dir), lb.make_a2nb2m_sets, weight_decay=True,
+    #         **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
+    # run_seq(N, "{}/abn_small_lstm_wd".format(new_dir), lb.make_abn_sets, weight_decay=True,
+    #         **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
+    # run_seq(N, "{}/anbn_small_lstm_wd".format(new_dir), lb.make_anbn_sets, weight_decay=True,
+    #         **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
+    # run_transf_seq(N, "{}/dyck1_small_trans".format(new_dir), lb.make_dyck1_sets_uniform,
+    #         **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+    # run_transf_seq(N, "{}/a2nb2m_small_trans".format(new_dir), lb.make_a2nb2m_sets,
+    #         **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
+    # run_transf_seq(N, "{}/abn_small_trans".format(new_dir), lb.make_abn_sets,
+    #         **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
+    # run_transf_seq(N, "{}/anbn_small_trans".format(new_dir), lb.make_anbn_sets,
+    #         **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
     #run(N, "anbnan", target_accuracies, lb.make_anbnan_io_cont_shuffled, **{"p": .1, "N": 1000})
     #run(N, "copy", target_accuracies, lb.make_double_abplus_io_cont_shuffled, **{"p": .1, "N": 1000})

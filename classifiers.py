@@ -261,9 +261,6 @@ def train(model, x_train, y_train, lengths_train, x_test, y_test, lengths_test, 
         y_test_hat = model(x_test, lengths_test)
         loss_test = bernoulli_loss(y_test, y_test_hat)
 
-        #if (i+1) % 10 == 0:
-        #    print(loss_test.item())
-
         if loss_test >= best_loss:
             early_stop_counter += 1
             if early_stop_counter > 4:
@@ -278,8 +275,8 @@ def train(model, x_train, y_train, lengths_train, x_test, y_test, lengths_test, 
     return model, best_loss
 
 
-def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, patience=float("inf"),
-                     l0_regularized=False, lam=.05):
+def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patience=float("inf"),
+                     l0_regularized=False):
     from math import ceil
     from random import sample
 
@@ -311,6 +308,7 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, patie
         batch = torch.tensor(sample(indices, batch_sz)).type(torch.LongTensor)
         for param in model.parameters():
             param.grad = None
+        model.train()
         x = x_train[batch].to("cuda")
         y = y_train[batch].to("cuda")
         mask = mask_train[batch].to("cuda")
@@ -333,6 +331,8 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, patie
             model.constrain_parameters()
 
         with torch.no_grad():
+            model.eval()
+
             x_test = language_set.test_input.to("cuda")
             y_test = language_set.test_output.to("cuda")
             mask_test = language_set.test_mask.to("cuda")
@@ -350,7 +350,7 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, patie
                 model.load_state_dict(torch.load("best_net_cache.ptr"))
                 print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
                       (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
-                return model, best_loss, percent_correct
+                return model, loss_test, test_percent_correct, epoch
         else:
             best_loss = loss_test
             early_stop_counter = 0
@@ -363,7 +363,9 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, patie
                size.item()))
 
         if epoch % increment == 0:
-            yield model, best_loss, percent_correct
+            print("Saving epoch %d" % (epoch))
+            yield model, loss_test, test_percent_correct, epoch
+
 
         epoch+=1
 
