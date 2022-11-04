@@ -278,7 +278,7 @@ def train(model, x_train, y_train, lengths_train, x_test, y_test, lengths_test, 
     return model, best_loss
 
 
-def branch_seq_train(model, language_set, target_loss, is_loss, batch_sz, max_epochs, increment, patience=20,
+def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, patience=float("inf"),
                      l0_regularized=False, lam=.05):
     from math import ceil
     from random import sample
@@ -300,16 +300,14 @@ def branch_seq_train(model, language_set, target_loss, is_loss, batch_sz, max_ep
 
     op = torch.optim.Adam(model.parameters(), lr=.0005)
     best_loss = torch.tensor([float('inf')]).squeeze()
-    loss_test = torch.tensor([float('inf')]).squeeze()
     percent_correct = 0
     early_stop_counter = 0
 
     indices = range(batches)
     train_percent_correct = 0
-    test_percent_correct = 0
     epoch = 0
     size = 0
-    while (is_loss and loss_test > target_loss) or ((not is_loss) and test_percent_correct < target_loss) and epoch < max_epochs:
+    while epoch < max_epochs:
         batch = torch.tensor(sample(indices, batch_sz)).type(torch.LongTensor)
         for param in model.parameters():
             param.grad = None
@@ -360,8 +358,8 @@ def branch_seq_train(model, language_set, target_loss, is_loss, batch_sz, max_ep
             torch.save(model.state_dict(), "best_net_cache.ptr")
         if l0_regularized:
             size = model.count_l0()
-        print("Accuracy: %s, loss: %s, counter: %d, train accuracy: %s, network size: %s" %
-              (percent_correct.item(), loss_test.item(), early_stop_counter, train_percent_correct.item(),
+        print("Epoch: %d, Accuracy: %s, loss: %s, counter: %d, train accuracy: %s, network size: %s" %
+              (epoch, test_percent_correct.item(), loss_test.item(), early_stop_counter, train_percent_correct.item(),
                size.item()))
 
         if epoch % increment == 0:
