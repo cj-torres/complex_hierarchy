@@ -305,30 +305,31 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
     epoch = 1
     size = torch.tensor([0])
     while epoch <= max_epochs:
-        batch = torch.tensor(sample(indices, batch_sz)).type(torch.LongTensor)
-        for param in model.parameters():
-            param.grad = None
-        model.train()
-        x = x_train[batch].to("cuda")
-        y = y_train[batch].to("cuda")
-        mask = mask_train[batch].to("cuda")
-        y_hat = model(x)
-        loss = bernoulli_loss_cont(y, y_hat, mask)
+        for i in range(batch_sz):
+            batch = torch.tensor(sample(indices, 1)).type(torch.LongTensor)
+            for param in model.parameters():
+                param.grad = None
+            model.train()
+            x = x_train[batch].to("cuda")
+            y = y_train[batch].to("cuda")
+            mask = mask_train[batch].to("cuda")
+            y_hat = model(x)
+            loss = bernoulli_loss_cont(y, y_hat, mask)
 
-        #breakpoint()
+            #breakpoint()
 
-        if l0_regularized:
-            re_loss = model.regularization()
-            loss = loss + re_loss
-        loss.backward()
-        train_percent_correct = correct_guesses_batch_seq(y, y_hat, mask)
+            if l0_regularized:
+                re_loss = model.regularization()
+                loss = loss + re_loss
+            loss.backward()
+            train_percent_correct = correct_guesses_batch_seq(y, y_hat, mask)
 
-        del mask, x, y
+            del mask, x, y
 
-        op.step()
+            op.step()
 
-        if l0_regularized:
-            model.constrain_parameters()
+            if l0_regularized:
+                model.constrain_parameters()
 
         with torch.no_grad():
             model.eval()
