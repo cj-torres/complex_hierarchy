@@ -305,8 +305,8 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
     epoch = 1
     size = torch.tensor([0])
     while epoch <= max_epochs:
-        for i in range(batch_sz//2):
-            batch = torch.tensor(sample(indices, 2)).type(torch.LongTensor)
+        for i in range(batch_sz//8):
+            batch = torch.tensor(sample(indices, 8)).type(torch.LongTensor)
             for param in model.parameters():
                 param.grad = None
             model.train()
