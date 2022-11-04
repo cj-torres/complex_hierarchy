@@ -4,6 +4,7 @@ random.seed(12345)
 import torch
 torch.manual_seed(12345)
 import numpy as np
+import copy
 np.random.seed(12345)
 
 
@@ -28,10 +29,25 @@ def run_branch(num, filename, target_accuracies, generator_function, **kwargs):
             writer.writerows(accuracy)
 
 
+def pre_train(language_set, model_in, desired_accuracy, epochs):
+    print("Pre-Training")
+    fail = True
+    while fail:
+        model = copy.deepcopy(model_in)
+        pre_train_gen = branch_seq_train(model, language_set, 512, epochs, 25, lam = 0)
+        percent_correct = 0
+        epoch = 0
+        while percent_correct < desired_accuracy and epoch < epochs:
+            model_out, _, percent_correct, epoch = next(pre_train_gen)
+        if percent_correct >= desired_accuracy:
+            fail = False
+    return model_out
+
+
 def regularized_branch(num, filename, generator_function, lambdas, epochs, **kwargs):
     # runs trials of branch sequencers (tries to predict correct possible continuations)
     # must accept branch sequencer language set
-    #with open(filename+".csv", 'w', newline='') as model_weight_file:
+
     with open(filename+"_loss.csv", 'w', newline='') as accuracy_file:
         #writer_weights = csv.writer(model_weight_file)
         writer_details = csv.writer(accuracy_file)
@@ -41,14 +57,15 @@ def regularized_branch(num, filename, generator_function, lambdas, epochs, **kwa
                 language_set = generator_function(**kwargs)
                 print("Model %d" % (i + 1))
                 model = LSTMBranchSequencer(4, 2, 4, 4, 3)
+                model = pre_train(language_set, model, .99, 1000)
                 for model_out, loss, percent_correct, epoch in branch_seq_train(model, language_set, 256, epochs, 25,
                                                                                 l0_regularized=True, lam=lam):
                     weights = model_to_list(model_out)
                         #writer_weights.writerow(weights)
                     with torch.no_grad():
                         l2 = sum([1 / 2 * w ** 2 for w in weights])
-                        l0 = model.count_l0
-                        re_loss = model.regularization()
+                        l0 = model_out.count_l0()
+                        re_loss = model_out.regularization().item()
                     writer_details.writerow([i + 1, loss.item(), percent_correct.item(), epoch, l2, l0, re_loss])
 
 
@@ -96,13 +113,13 @@ if __name__ == '__main__':
     new_dir = "Output-{}".format(str(date.today()))
     os.mkdir(new_dir)
 
-    regularized_branch(N, "{}/dyck1_small_lstm".format(new_dir), lb.make_dyck1_sets_uniform, lambdas, 7500,
+    regularized_branch(N, "{}/dyck1_small_lstm".format(new_dir), lb.make_dyck1_sets_uniform_continuation, lambdas, 7500,
             **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
-    regularized_branch(N, "{}/a2nb2m_small_lstm".format(new_dir), lb.make_a2nb2m_sets, lambdas, 7500,
+    regularized_branch(N, "{}/a2nb2m_small_lstm".format(new_dir), lb.make_a2nb2m_branch_sets, lambdas, 7500,
             **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
-    regularized_branch(N, "{}/abn_small_lstm".format(new_dir), lb.make_abn_sets, lambdas, 7500,
+    regularized_branch(N, "{}/abn_small_lstm".format(new_dir), lb.make_abn_branch_sets, lambdas, 7500,
             **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
-    regularized_branch(N, "{}/anbn_small_lstm".format(new_dir), lb.make_anbn_sets, lambdas, 7500,
+    regularized_branch(N, "{}/anbn_small_lstm".format(new_dir), lb.make_anbn_branch_sets, lambdas, 7500,
             **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
 
 

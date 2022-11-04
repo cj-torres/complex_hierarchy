@@ -31,6 +31,7 @@ class L0_Regularizer(torch.nn.Module):
         # allowing them to be replaced by non-leaf tensors
 
         self.reset_parameters()
+        self.to("cpu")
 
         for name in self.param_names:
             L0_Regularizer.recursive_del(self.module, name)
