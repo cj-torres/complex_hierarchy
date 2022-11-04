@@ -46,17 +46,16 @@ def pre_train(language_set, model_template, desired_accuracy, epochs, *args, **k
 
 def regularized_branch(num, filename, generator_function, lambdas, epochs, **kwargs):
     # runs trials of branch sequencers (tries to predict correct possible continuations)
-    # must accept branch sequencer language set
+    # branch sequencers regularized, uses list of lambdas as input
 
     with open(filename+"_loss.csv", 'w', newline='') as accuracy_file:
-        #writer_weights = csv.writer(model_weight_file)
         writer_details = csv.writer(accuracy_file)
         writer_details.writerow(["model_num", "loss", "accuracy", "epoch", "l2", "l0", "re loss"])
         for lam in lambdas:
             for i in range(num):
                 language_set = generator_function(**kwargs)
                 print("Model %d" % (i + 1))
-                model = LSTMBranchSequencer(4, 2, 4, 4, 3)
+                model = LSTMBranchSequencer(4, 3, 5, 5, 3)
                 for model_out, loss, percent_correct, epoch in branch_seq_train(model, language_set, 256, epochs, 25,
                                                                                 l0_regularized=True, lam=lam):
                     weights = model_to_list(model_out)
