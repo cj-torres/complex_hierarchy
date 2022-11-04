@@ -57,14 +57,14 @@ def regularized_branch(num, filename, generator_function, lambdas, epochs, **kwa
                 language_set = generator_function(**kwargs)
                 print("Model %d" % (i + 1))
                 model = LSTMBranchSequencer(4, 2, 4, 4, 3)
-                model = pre_train(language_set, model, .99, 1000)
+                model = pre_train(language_set, model, .99, 3000)
                 for model_out, loss, percent_correct, epoch in branch_seq_train(model, language_set, 256, epochs, 25,
                                                                                 l0_regularized=True, lam=lam):
                     weights = model_to_list(model_out)
                         #writer_weights.writerow(weights)
                     with torch.no_grad():
                         l2 = sum([1 / 2 * w ** 2 for w in weights])
-                        l0 = model_out.count_l0()
+                        l0 = model_out.count_l0().item()
                         re_loss = model_out.regularization().item()
                     writer_details.writerow([i + 1, loss.item(), percent_correct.item(), epoch, l2, l0, re_loss])
 

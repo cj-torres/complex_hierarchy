@@ -303,7 +303,7 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
     indices = range(batches)
     train_percent_correct = 0
     epoch = 1
-    size = 0
+    size = torch.tensor([0])
     while epoch <= max_epochs:
         batch = torch.tensor(sample(indices, batch_sz)).type(torch.LongTensor)
         for param in model.parameters():
@@ -360,7 +360,7 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
             size = model.count_l0()
         print(("Epoch: %d, Accuracy: %s, loss: %s, counter: %d, train accuracy: %s"+", network size: %s"*l0_regularized)
               % ((epoch, test_percent_correct.item(), loss_test.item(), early_stop_counter, train_percent_correct.item())
-                 + (size,)*l0_regularized))
+                 + (size.item(),)*l0_regularized))
 
         if epoch % increment == 0:
             print("Saving epoch %d" % (epoch))
