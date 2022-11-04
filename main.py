@@ -29,11 +29,11 @@ def run_branch(num, filename, target_accuracies, generator_function, **kwargs):
             writer.writerows(accuracy)
 
 
-def pre_train(language_set, model_in, desired_accuracy, epochs):
+def pre_train(language_set, model_template, desired_accuracy, epochs, *args, **kwargs):
     print("Pre-Training")
     fail = True
     while fail:
-        model = copy.deepcopy(model_in)
+        model = model_template(*args, **kwargs)
         pre_train_gen = branch_seq_train(model, language_set, 512, epochs, 25, lam = 0)
         percent_correct = 0
         epoch = 0
@@ -57,11 +57,9 @@ def regularized_branch(num, filename, generator_function, lambdas, epochs, **kwa
                 language_set = generator_function(**kwargs)
                 print("Model %d" % (i + 1))
                 model = LSTMBranchSequencer(4, 2, 4, 4, 3)
-                model = pre_train(language_set, model, .99, 3000)
                 for model_out, loss, percent_correct, epoch in branch_seq_train(model, language_set, 256, epochs, 25,
                                                                                 l0_regularized=True, lam=lam):
                     weights = model_to_list(model_out)
-                        #writer_weights.writerow(weights)
                     with torch.no_grad():
                         l2 = sum([1 / 2 * w ** 2 for w in weights])
                         l0 = model_out.count_l0().item()
