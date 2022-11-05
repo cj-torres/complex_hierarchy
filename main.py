@@ -108,7 +108,7 @@ if __name__ == '__main__':
     from datetime import date
     import os
     N = 10
-    lambdas = [.001, .005, .01, .05, .1, .2, .25, .3, .5, .75, 1]
+    lambdas = [.001, .002, .003, .004, .005, .01, .02, .03, .04, .05]
     new_dir = "Output-{}".format(str(date.today()))
     os.mkdir(new_dir)
 
