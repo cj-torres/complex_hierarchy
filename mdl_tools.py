@@ -123,9 +123,10 @@ class L0_Regularizer(torch.nn.Module):
         mask = self.sample_z(param, sample)
         return mask * self.pre_parameters[param+"_p"]
 
-    def forward(self, x):
+    def forward(self, x, batch_sz=1):
         """rewrite parameters (tensors) of core module and feedforward"""
         for param in self.param_names:
+            torch.stack([self.sample_weights(param, sample=self.training) for i in range(batch_sz)])
             L0_Regularizer.recursive_set(self.module, param, self.sample_weights(param, sample=self.training))
 
         return self.module(x)

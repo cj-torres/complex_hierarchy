@@ -295,7 +295,8 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
     y_train = language_set.train_output#.to("cuda")
     mask_train = language_set.train_mask#.to("cuda")
 
-    op = torch.optim.Adam(model.parameters(), lr=.0005)
+    op = torch.optim.Adam(model.parameters(), lr=.02)
+    #lr_s = torch.optim.lr_scheduler.StepLR(op, )
     best_loss = torch.tensor([float('inf')]).squeeze()
     percent_correct = 0
     early_stop_counter = 0
@@ -306,14 +307,14 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
     size = torch.tensor([0])
     while epoch <= max_epochs:
         for i in range(batch_sz//8):
-            batch = torch.tensor(sample(indices, 8)).type(torch.LongTensor)
             for param in model.parameters():
                 param.grad = None
+            batch = torch.tensor(sample(indices, 8)).type(torch.LongTensor)
             model.train()
             x = x_train[batch].to("cuda")
             y = y_train[batch].to("cuda")
             mask = mask_train[batch].to("cuda")
-            y_hat = model(x)
+            y_hat = model(x, 8)
             loss = bernoulli_loss_cont(y, y_hat, mask)
 
             #breakpoint()
@@ -328,8 +329,8 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
 
             op.step()
 
-            if l0_regularized:
-                model.constrain_parameters()
+        if l0_regularized:
+            model.constrain_parameters()
 
         with torch.no_grad():
             model.eval()

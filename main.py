@@ -50,13 +50,13 @@ def regularized_branch(num, filename, generator_function, lambdas, epochs, **kwa
 
     with open(filename+"_loss.csv", 'w', newline='') as accuracy_file:
         writer_details = csv.writer(accuracy_file)
-        writer_details.writerow(["model_num", "loss", "accuracy", "epoch", "l2", "l0", "re loss"])
+        writer_details.writerow(["model_num", "lambda", "loss", "accuracy", "epoch", "l2", "l0", "re loss"])
         for lam in lambdas:
             for i in range(num):
                 language_set = generator_function(**kwargs)
                 print("Model %d" % (i + 1))
-                model = LSTMBranchSequencer(4, 3, 5, 5, 3)
-                for model_out, loss, percent_correct, epoch in branch_seq_train(model, language_set, 256, epochs, 25,
+                model = LSTMBranchSequencer(4, 2, 4, 4, 3)
+                for model_out, loss, percent_correct, epoch in branch_seq_train(model, language_set, 256, epochs, 5,
                                                                                 l0_regularized=True, lam=lam):
                     if loss.isnan().any():
                         break
@@ -65,7 +65,7 @@ def regularized_branch(num, filename, generator_function, lambdas, epochs, **kwa
                         l2 = sum([1 / 2 * w ** 2 for w in weights])
                         l0 = model_out.count_l0().item()
                         re_loss = model_out.regularization().item()
-                    writer_details.writerow([i + 1, loss.item(), percent_correct.item(), epoch, l2, l0, re_loss])
+                    writer_details.writerow([i + 1, lam, loss.item(), percent_correct.item(), epoch, l2, l0, re_loss])
 
 
 def run_seq(num, filename, generator_function, weight_decay=False, **kwargs):
@@ -108,17 +108,17 @@ if __name__ == '__main__':
     from datetime import date
     import os
     N = 10
-    lambdas = [.001, .002, .003, .004, .005, .01, .02, .03, .04, .05]
+    lambdas = [.001, .002, .003, .004, .005] #, .01, .02, .03, .04, .05]
     new_dir = "Output-{}".format(str(date.today()))
     os.mkdir(new_dir)
 
-    regularized_branch(N, "{}/dyck1_small_lstm".format(new_dir), lb.make_dyck1_sets_uniform_continuation, lambdas, 7500,
+    regularized_branch(N, "{}/dyck1_small_lstm".format(new_dir), lb.make_dyck1_sets_uniform_continuation, lambdas, 2000,
             **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
-    regularized_branch(N, "{}/a2nb2m_small_lstm".format(new_dir), lb.make_a2nb2m_branch_sets, lambdas, 7500,
+    regularized_branch(N, "{}/a2nb2m_small_lstm".format(new_dir), lb.make_a2nb2m_branch_sets, lambdas, 2000,
             **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
-    regularized_branch(N, "{}/abn_small_lstm".format(new_dir), lb.make_abn_branch_sets, lambdas, 7500,
+    regularized_branch(N, "{}/abn_small_lstm".format(new_dir), lb.make_abn_branch_sets, lambdas, 2000,
             **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
-    regularized_branch(N, "{}/anbn_small_lstm".format(new_dir), lb.make_anbn_branch_sets, lambdas, 7500,
+    regularized_branch(N, "{}/anbn_small_lstm".format(new_dir), lb.make_anbn_branch_sets, lambdas, 2000,
             **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
 
 
