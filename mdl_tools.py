@@ -101,6 +101,15 @@ class L0_Regularizer(torch.nn.Module):
             total.append(torch.sum(1 - self.cdf_qz(0, param)).unsqueeze(dim=0))
         return torch.cat(total).sum()
 
+    def count_l2(self):
+        total = []
+        for param in self.param_names:
+            total.append(self._l2_helper(param).unsqueeze(dim=0))
+        return torch.cat(total).sum()
+
+    def _l2_helper(self, param):
+        return (self.sample_weights(param, False)**2).sum()
+
     def get_eps(self, size):
         """Uniform random numbers for the concrete distribution"""
         # Variable deprecated and removed

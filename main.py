@@ -61,9 +61,9 @@ def regularized_branch(num, filename, generator_function, lambdas, epochs, **kwa
                                                                                 l0_regularized=True, lam=lam):
                     if loss.isnan().any():
                         break
-                    weights = model_to_list(model_out)
+                    #weights = model_to_list(model_out)
                     with torch.no_grad():
-                        l2 = sum([1 / 2 * w ** 2 for w in weights])
+                        l2 = model_out.count_l2().item()
                         l0 = model_out.count_l0().item()
                         re_loss = model_out.regularization().item()
                     writer_details.writerow([i + 1, lam, loss.item(), percent_correct.item(), epoch, l2, l0, re_loss])
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     from datetime import date
     import os
     N = 10
-    lambdas = [.001, .0015, .002, .0025] #, .01, .02, .03, .04, .05]
+    lambdas = [.001, .0015, .002, .0025, .003] #, .01, .02, .03, .04, .05]
     new_dir = "Output-{}".format(str(date.today()))
     os.mkdir(new_dir)
     epochs = 1750
