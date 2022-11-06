@@ -7,6 +7,7 @@ import numpy as np
 import copy
 np.random.seed(12345)
 
+import thread
 
 def run_branch(num, filename, target_accuracies, generator_function, **kwargs):
     # runs trials of branch sequencers (tries to predict correct possible continuations)
@@ -108,17 +109,18 @@ if __name__ == '__main__':
     from datetime import date
     import os
     N = 10
-    lambdas = [.001, .002, .003, .004, .005] #, .01, .02, .03, .04, .05]
+    lambdas = [.001, .0015, .002, .0025] #, .01, .02, .03, .04, .05]
     new_dir = "Output-{}".format(str(date.today()))
     os.mkdir(new_dir)
+    epochs = 1750
 
-    regularized_branch(N, "{}/dyck1_small_lstm".format(new_dir), lb.make_dyck1_sets_uniform_continuation, lambdas, 2000,
+    regularized_branch(N, "{}/dyck1_small_lstm".format(new_dir), lb.make_dyck1_sets_uniform_continuation, lambdas, epochs,
             **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
-    regularized_branch(N, "{}/a2nb2m_small_lstm".format(new_dir), lb.make_a2nb2m_branch_sets, lambdas, 2000,
+    regularized_branch(N, "{}/a2nb2m_small_lstm".format(new_dir), lb.make_a2nb2m_branch_sets, lambdas, epochs,
             **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
-    regularized_branch(N, "{}/abn_small_lstm".format(new_dir), lb.make_abn_branch_sets, lambdas, 2000,
+    regularized_branch(N, "{}/abn_small_lstm".format(new_dir), lb.make_abn_branch_sets, lambdas, epochs,
             **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
-    regularized_branch(N, "{}/anbn_small_lstm".format(new_dir), lb.make_anbn_branch_sets, lambdas, 2000,
+    regularized_branch(N, "{}/anbn_small_lstm".format(new_dir), lb.make_anbn_branch_sets, lambdas, epochs,
             **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
 
 
