@@ -295,7 +295,7 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
     y_train = language_set.train_output#.to("cuda")
     mask_train = language_set.train_mask#.to("cuda")
 
-    op = torch.optim.Adam(model.parameters(), lr=.02)
+    op = torch.optim.Adam(model.parameters(), lr=.03)
     #lr_s = torch.optim.lr_scheduler.StepLR(op, )
     best_loss = torch.tensor([float('inf')]).squeeze()
     percent_correct = 0
@@ -314,7 +314,7 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
             x = x_train[batch].to("cuda")
             y = y_train[batch].to("cuda")
             mask = mask_train[batch].to("cuda")
-            y_hat = model(x, 8)
+            y_hat = model(x)
             loss = bernoulli_loss_cont(y, y_hat, mask)
 
             #breakpoint()

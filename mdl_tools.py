@@ -35,7 +35,7 @@ class L0_Regularizer(torch.nn.Module):
 
         for name in self.param_names:
             L0_Regularizer.recursive_del(self.module, name)
-            L0_Regularizer.recursive_set(self.module, name, self.sample_weights(name))
+            L0_Regularizer.recursive_set(self.module, name, self.sample_weights(name, 1))
 
 
     ''' 
@@ -129,13 +129,12 @@ class L0_Regularizer(torch.nn.Module):
             return torch.nn.functional.hardtanh(pi * (self.limit_b - self.limit_a) + self.limit_a, min_val=0, max_val=1)
 
     def sample_weights(self, param, sample=True):
-        mask = self.sample_z(param, sample)
+        mask = self.sample_z(param,  sample)
         return mask * self.pre_parameters[param+"_p"]
 
-    def forward(self, x, batch_sz=1):
+    def forward(self, x):
         """rewrite parameters (tensors) of core module and feedforward"""
         for param in self.param_names:
-            torch.stack([self.sample_weights(param, sample=self.training) for i in range(batch_sz)])
             L0_Regularizer.recursive_set(self.module, param, self.sample_weights(param, sample=self.training))
 
         return self.module(x)
