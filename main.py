@@ -107,7 +107,7 @@ if __name__ == '__main__':
     from datetime import date
     import os
     N = 10
-    lambdas = [.001, .0015, .002, .0025, .003] #, .01, .02, .03, .04, .05]
+    lambdas = [.0035, .004, .0045, .005] #, .01, .02, .03, .04, .05]
     new_dir = "Output-{}".format(str(date.today()))
     if not os.path.isdir(new_dir):
         os.mkdir(new_dir)
