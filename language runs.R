@@ -18,7 +18,10 @@ frontiers = rbind(frontiers1, frontiers2, frontiers3, frontiers4, frontiers5, fr
 
 frontiers$model_num <- as.factor(frontiers$model_num)
 frontiers$lambda <- as.factor(frontiers$lambda)
-frontiers_filtered = frontiers %>% filter(((epoch>1000)|((lang=="abn") & (epoch>500)))&(accuracy>.995))%>% mutate(log_loss = log(loss))
-frontiers_hulls = frontiers_filtered%>% group_by(lang) %>% slice(chull(l0,log_loss))
-plot = ggplot(frontiers_filtered, aes(x = l0, y = log_loss)) + geom_point(aes(color = epoch)) +xlab("Number of parameters")+ylab("Bernoulli Loss (log scale)") + xlim(15,45) + theme_classic() + facet_wrap(~lang)
-plot+geom_polygon(data=frontiers_hulls, alpha=.25) #+ scale_y_continuous(breaks = c(10e-2, 10e-4, 10e-6, 10e-8), limits = c(10e-9,10e-1), trans="log2")
+frontiers_filtered = frontiers %>% filter(((epoch>1000)|((lang=="abn") & (epoch>500)))&(accuracy>.995))%>% mutate(log_loss = log(loss)) %>% filter(is.finite(log_loss))
+frontiers_hulls = frontiers_filtered%>%select(lang,l0,loss,epoch)%>% group_by(lang) %>% slice(chull(l0,log(loss)*32))
+plot = ggplot(frontiers_filtered, aes(x = l0, y = loss)) + geom_point(aes(color = epoch)) +xlab("Number of parameters")+ylab("Bernoulli Loss (log scale)") + xlim(15,45) + theme_classic() + facet_wrap(~lang)
+plot+geom_polygon(data=frontiers_hulls, alpha=.25) + scale_y_continuous(breaks = c(10e-2, 10e-4, 10e-6, 10e-8), limits = c(10e-9,10e-1), trans="log2")
+
+analysis = manova(cbind(l0, exp_loss) ~ lang, data=filtered_frontiers)
+summary(analysis)
