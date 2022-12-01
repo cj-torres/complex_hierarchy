@@ -593,6 +593,76 @@ def make_abn_branch_sets(N, p, split_p, reject_threshold):
 
     return LanguageData(*abn_train+abn_test)
 
+#### new for subregular ####
+
+# SL
+
+# {ab, bc, cd, da} / ~{aa, bb, cc, dd, ad, ac, ca, cb, db, dc, bd, ba}
+
+
+def gen_sl1_words_redundant(N, p):
+    sl1 = []
+    for i in range(N):
+        n = geometric(p)
+        sl1.append(("S"+"abcd"*(n//4+1))[0:n+1])
+    return sl1
+
+
+def make_sl1_continuation(w):
+    return ([[1, 1, 0, 0, 0], [1, 0, 1, 0, 0], [1, 0, 0, 1, 0], [1, 0, 0, 0, 1]]*(len(w)//4+1))[0:len(w)]
+
+
+def make_sl1_branch_sets(N, p, split_p, reject_threshold):
+    assert (split_p <= 1)
+    assert (N * (1 - split_p) >= reject_threshold)
+    sl1 = gen_sl1_words_redundant(N, p)
+    sl1_train_in, sl1_test_in = shuffler(sl1, split_p, reject_threshold)
+    sl1_train = to_continuation_tensors(sl1_train_in, make_sl1_continuation)
+    sl1_test = to_continuation_tensors(sl1_test_in, make_sl1_continuation)
+
+    return LanguageData(*sl1_train+sl1_test)
+
+
+# {aa, bb, cc, dd, ad, ac, ca, cb, db, dc, bd, ba} / ~{ab, bc, cd, da}
+
+def gen_sl2_words_redundant(N, p):
+    sl2 = []
+    for i in range(N):
+        while True:
+            n = geometric(p)
+            candidate = "S"+"".join(random.choices(["a", "b", "c", "d"], k=n))
+            if candidate != ("S"+"abcd"*(n//4+1))[0:n+1] or candidate == "S":
+                sl2.append(candidate)
+                break
+    return sl2
+
+
+def make_sl2_continuation(w):
+    cont_tensor = torch.Tensor([
+        [1, 1, 1, 1, 1],
+        [1, 1, 0, 1, 1],
+        [1, 1, 1, 0, 1],
+        [1, 1, 1, 1, 0],
+        [1, 0, 1, 1, 1],
+    ])
+    return ([[1, 1, 0, 0, 0], [1, 0, 1, 0, 0], [1, 0, 0, 1, 0], [1, 0, 0, 0, 1]]*(len(w)//4+1))[0:len(w)]
+
+def make_sl2_branch_sets(N, p, split_p, reject_threshold):
+    assert (split_p <= 1)
+    assert (N * (1 - split_p) >= reject_threshold)
+    sl1 = gen_sl1_words_redundant(N, p)
+    sl1_train_in, sl1_test_in = shuffler(sl1, split_p, reject_threshold)
+    sl1_train = to_continuation_tensors(sl1_train_in, make_sl1_continuation)
+    sl1_test = to_continuation_tensors(sl1_test_in, make_sl1_continuation)
+
+    return LanguageData(*sl1_train+sl1_test)
+
+# TSL
+
+# s(a) -> "" ; {bc, cd, db} / ~{bb, cc, dd, bd, dc, cb}
+
+# s(a) -> "" ; {bb, cc, dd, bd, dc, cb} / ~{bc, cd, db}
+
 
 
 
