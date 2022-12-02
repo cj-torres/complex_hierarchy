@@ -116,10 +116,10 @@ if __name__ == '__main__':
 
     regularized_branch(N, "{}/fl_small_lstm".format(new_dir), lb.make_fl_branch_sets, lambdas,
                        epochs,
-                       *(4, 2, 4, 4, 4), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+                       *(5, 2, 4, 4, 4), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
     regularized_branch(N, "{}/sh_small_lstm".format(new_dir), lb.make_sh_branch_sets, lambdas,
                        epochs,
-                       *(4, 2, 4, 4, 4), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+                       *(5, 2, 4, 4, 4), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
 
     #regularized_branch(N, "{}/dyck1_small_lstm".format(new_dir), lb.make_dyck1_sets_uniform_continuation, lambdas, epochs,
     #                   *(4, 2, 4, 4, 4), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
