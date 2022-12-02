@@ -638,24 +638,24 @@ def gen_sl2_words_redundant(N, p):
 
 
 def make_sl2_continuation(w):
-    cont_tensor = torch.Tensor([
-        [1, 1, 1, 1, 1],
-        [1, 1, 0, 1, 1],
-        [1, 1, 1, 0, 1],
-        [1, 1, 1, 1, 0],
-        [1, 0, 1, 1, 1],
-    ])
-    return ([[1, 1, 0, 0, 0], [1, 0, 1, 0, 0], [1, 0, 0, 1, 0], [1, 0, 0, 0, 1]]*(len(w)//4+1))[0:len(w)]
+    cont_dict = {
+        "S": [1, 1, 1, 1, 1],
+        "a": [1, 1, 0, 1, 1],
+        "b": [1, 1, 1, 0, 1],
+        "c": [1, 1, 1, 1, 0],
+        "d": [1, 0, 1, 1, 1]
+    }
+    return list(map(lambda c : cont_dict[c], w))
 
 def make_sl2_branch_sets(N, p, split_p, reject_threshold):
     assert (split_p <= 1)
     assert (N * (1 - split_p) >= reject_threshold)
-    sl1 = gen_sl1_words_redundant(N, p)
-    sl1_train_in, sl1_test_in = shuffler(sl1, split_p, reject_threshold)
-    sl1_train = to_continuation_tensors(sl1_train_in, make_sl1_continuation)
-    sl1_test = to_continuation_tensors(sl1_test_in, make_sl1_continuation)
+    sl2 = gen_sl2_words_redundant(N, p)
+    sl2_train_in, sl2_test_in = shuffler(sl2, split_p, reject_threshold)
+    sl2_train = to_continuation_tensors(sl2_train_in, make_sl2_continuation)
+    sl2_test = to_continuation_tensors(sl2_test_in, make_sl2_continuation)
 
-    return LanguageData(*sl1_train+sl1_test)
+    return LanguageData(*sl2_train+sl2_test)
 
 # TSL
 
@@ -664,6 +664,87 @@ def make_sl2_branch_sets(N, p, split_p, reject_threshold):
 # s(a) -> "" ; {bb, cc, dd, bd, dc, cb} / ~{bc, cd, db}
 
 
+# Sibilant harmony group Lai (2015) and Avcu (2018)
 
+# unlike other words these are mandatory length 2 or more
+
+def make_fl_word(n):
+    center = "".join(random.choices(["a", "b", "c"], k=n))
+    sib = random.choice(["b", "c"])
+    return "S" + sib + center + sib
+
+
+def make_fl_words_redundant(N, p):
+    fl = []
+    for i in range(N):
+        n = geometric(p)
+        fl.append(make_fl_word(n))
+    return fl
+
+
+def make_fl_continuation(w):
+    sib = w[1]
+    start = [[0, 0, 1, 1]]
+    second = [[0, 1, 1, 1]]
+    if sib == "b":
+        cont = {"a": [0, 1, 1, 1],
+                "b": [1, 1, 1, 1],
+                "c": [0, 1, 1, 1]}
+
+    else:
+        cont = {"a": [0, 1, 1, 1],
+                "b": [0, 1, 1, 1],
+                "c": [1, 1, 1, 1]}
+    return start + second + list(map(lambda c: cont[c], w[2:]))
+
+
+def make_fl_branch_sets(N, p, split_p, reject_threshold):
+    assert (split_p <= 1)
+    assert (N * (1 - split_p) >= reject_threshold)
+    fl = make_fl_words_redundant(N, p)
+    fl_train_in, fl_test_in = shuffler(fl, split_p, reject_threshold)
+    fl_train = to_continuation_tensors(fl_train_in, make_fl_continuation)
+    fl_test = to_continuation_tensors(fl_test_in, make_fl_continuation)
+
+    return LanguageData(*fl_train+fl_test)
+
+
+def make_sh_word(n):
+    sib = random.choice(["b", "c"])
+    center = "".join(random.choices(["a", sib], k=n))
+    return "S" + sib + center + sib
+
+
+def make_sh_words_redundant(N, p):
+    sh = []
+    for i in range(N):
+        n = geometric(p)
+        sh.append(make_sh_word(n))
+    return sh
+
+
+def make_sh_continuation(w):
+    sib = w[1]
+    start = [[0, 0, 1, 1]]
+    if sib == "b":
+        second = [[0, 1, 1, 0]]
+        cont = {"a": [0, 1, 1, 0],
+                "b": [1, 1, 1, 0]}
+    else:
+        second = [[0, 1, 0, 1]]
+        cont = {"a": [0, 1, 0, 1],
+                "c": [1, 1, 0, 1]}
+    return start + second + list(map(lambda c: cont[c], w[2:]))
+
+
+def make_sh_branch_sets(N, p, split_p, reject_threshold):
+    assert (split_p <= 1)
+    assert (N * (1 - split_p) >= reject_threshold)
+    sh = make_sh_words_redundant(N, p)
+    sh_train_in, sh_test_in = shuffler(sh, split_p, reject_threshold)
+    sh_train = to_continuation_tensors(sh_train_in, make_sh_continuation)
+    sh_test = to_continuation_tensors(sh_test_in, make_sh_continuation)
+
+    return LanguageData(*sh_train+sh_test)
 
 

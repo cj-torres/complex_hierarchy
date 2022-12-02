@@ -7,6 +7,7 @@ import numpy as np
 import copy
 np.random.seed(12345)
 
+
 def run_branch(num, filename, target_accuracies, generator_function, **kwargs):
     # runs trials of branch sequencers (tries to predict correct possible continuations)
     # must accept branch sequencer language set
@@ -43,7 +44,7 @@ def pre_train(language_set, model_template, desired_accuracy, epochs, *args, **k
     return model_out
 
 
-def regularized_branch(num, filename, generator_function, lambdas, epochs, **kwargs):
+def regularized_branch(num, filename, generator_function, lambdas, epochs,  *model_args, **kwargs):
     # runs trials of branch sequencers (tries to predict correct possible continuations)
     # branch sequencers regularized, uses list of lambdas as input
 
@@ -54,7 +55,7 @@ def regularized_branch(num, filename, generator_function, lambdas, epochs, **kwa
             for i in range(num):
                 language_set = generator_function(**kwargs)
                 print("Model %d" % (i + 1))
-                model = LSTMBranchSequencer(4, 2, 4, 3, 3)
+                model = LSTMBranchSequencer(*model_args)
                 for model_out, loss, percent_correct, epoch in branch_seq_train(model, language_set, 256, epochs, 5,
                                                                                 l0_regularized=True, lam=lam):
                     if loss.isnan().any():
@@ -107,16 +108,23 @@ if __name__ == '__main__':
     from datetime import date
     import os
     N = 10
-    lambdas = [.0035, .004, .0045, .005] #, .01, .02, .03, .04, .05]
+    lambdas = [.001, .0015, .002, .0025, .003, .0035, .004, .0045, .005] #, .01, .02, .03, .04, .05]
     new_dir = "Output-{}".format(str(date.today()))
     if not os.path.isdir(new_dir):
         os.mkdir(new_dir)
     epochs = 1750
 
-    regularized_branch(N, "{}/dyck1_small_lstm".format(new_dir), lb.make_dyck1_sets_uniform_continuation, lambdas, epochs,
-            **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
-    regularized_branch(N, "{}/a2nb2m_small_lstm".format(new_dir), lb.make_a2nb2m_branch_sets, lambdas, epochs,
-            **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
+    regularized_branch(N, "{}/fl_small_lstm".format(new_dir), lb.make_fl_branch_sets, lambdas,
+                       epochs,
+                       *(4, 2, 4, 4, 4), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+    regularized_branch(N, "{}/sh_small_lstm".format(new_dir), lb.make_sh_branch_sets, lambdas,
+                       epochs,
+                       *(4, 2, 4, 4, 4), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+
+    #regularized_branch(N, "{}/dyck1_small_lstm".format(new_dir), lb.make_dyck1_sets_uniform_continuation, lambdas, epochs,
+    #                   *(4, 2, 4, 4, 4), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+    #regularized_branch(N, "{}/a2nb2m_small_lstm".format(new_dir), lb.make_a2nb2m_branch_sets, lambdas, epochs,
+    #        **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
     #regularized_branch(N, "{}/abn_small_lstm".format(new_dir), lb.make_abn_branch_sets, lambdas, epochs,
     #        **{"p": .05, "N": 1000, "reject_threshold": 200, "split_p": .795})
     #regularized_branch(N, "{}/anbn_small_lstm".format(new_dir), lb.make_anbn_branch_sets, lambdas, epochs,
