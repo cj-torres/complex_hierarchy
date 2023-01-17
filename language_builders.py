@@ -769,6 +769,19 @@ def make_l12_words_redundant(N, p):
     return l12
 
 
+def make_l12_sets(N, p, split_p, reject_threshold):
+    # generates N words in l12 with n sampled from a geometric distribution
+    # p geometric probability
+    # mean of geometric is 1/p
+    assert(split_p <= 1)
+    assert(N*(1-split_p) >= reject_threshold)
+    l12 = make_l12_words_redundant(N, p)
+    l12_train_in, l12_test_in = shuffler(l12, split_p, reject_threshold)
+    l12_train = to_tensors(l12_train_in)
+    l12_test = to_tensors(l12_test_in)
+
+    return LanguageData(*l12_train+l12_test)
+
 # Heinz and Idsardi 2013, p. 117
 
 
