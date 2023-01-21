@@ -1,7 +1,7 @@
-#rm(list = ls())
+rm(list = ls())
 library(tidyverse)
 broom::tidy(ad_aov)
-#library(broom)
+library(broom)
 
 frontiers1 = read.csv("C:\\Users\\torre\\PycharmProjects\\complex_hierarchy\\Output-2022-11-06\\dyck1_small_lstm_loss.csv", header = TRUE, fileEncoding="UTF-8-BOM") %>% mutate(lang="dyck")
 frontiers2 = read.csv("C:\\Users\\torre\\PycharmProjects\\complex_hierarchy\\Output-2022-11-06\\abn_small_lstm_loss.csv", header = TRUE, fileEncoding="UTF-8-BOM") %>% mutate(lang="abn")
@@ -12,7 +12,9 @@ frontiers6 = read.csv("C:\\Users\\torre\\PycharmProjects\\complex_hierarchy\\Out
 frontiers7 = read.csv("C:\\Users\\torre\\PycharmProjects\\complex_hierarchy\\Output-2022-11-08\\anbn_small_lstm_loss.csv", header = TRUE, fileEncoding="UTF-8-BOM") %>% mutate(lang="anbn")
 frontiers8 = read.csv("C:\\Users\\torre\\PycharmProjects\\complex_hierarchy\\Output-2022-11-08\\a2nb2m_small_lstm_loss.csv", header = TRUE, fileEncoding="UTF-8-BOM") %>% mutate(lang="a2nb2m")
 
-
+frontierssh = read.csv("C:\\Users\\torre\\PycharmProjects\\complex_hierarchy\\Output-2022-12-02\\sh_small_lstm_loss.csv", header = TRUE, fileEncoding="UTF-8-BOM") %>% mutate(lang="sh")
+  
+frontiersfl = read.csv("C:\\Users\\torre\\PycharmProjects\\complex_hierarchy\\Output-2022-12-02\\fl_small_lstm_loss.csv", header = TRUE, fileEncoding="UTF-8-BOM") %>% mutate(lang="fl")
 
 
 #frontiers = rbind(frontiers1, frontiers2)
@@ -32,39 +34,87 @@ summary(analysis)
 
 frontiers_modified = frontiers_filtered %>% mutate(is_regular = ((lang == "a2nb2m")|(lang=="abn")))
 frontiers_modified = frontiers_modified %>% mutate(lang = as.factor(lang)) %>% mutate(log_loss_inv = 1/log_loss)
-frontiers_modified_D = frontiers_modified[order(frontiers_modified$l0,frontiers_modified$loss,decreasing=FALSE),] 
-front = D[which(!duplicated(cummin(frontiers_modified_D$loss))),]
+
+harmony = rbind(frontierssh, frontiersfl) %>% mutate(lang = as.factor(lang)) %>% mutate(log_loss = log(loss)) %>% filter(is.finite(log_loss)) %>% filter(epoch>750)
+
 
 
 pareto <- function(data, x, y){
 
-  pareto <- logical(length(data[,x]))
+  pareto.1 <- logical(length(data[,x]))
   x.sort <- sort(data[,x])
   y.sort <- data[,y][order(data[,x])]
   
   for(i in 1:length(x.sort)){
-    pareto[i] <- all(y.sort[1:i] >= y.sort[i])
+    pareto.1[i] <- all(y.sort[1:i] >= y.sort[i])
   }
   
-  return(re_ordered.pareto = pareto.2[match(1:length(data[,x]), order(data[,x]))])
+  return(pareto.1[match(1:length(data[,x]), order(data[,x]))])
 }
 
-frontiers_modified$is_pareto <- re_ordered.pareto
-
-plot = ggplot(frontiers_modified, aes(x=l0, y=log_loss, color=is_pareto)) + geom_point() #+ facet_wrap(~lang)
-plot
-
-model = lm(log_loss_inv ~ l0+epoch+lang, data = frontiers_modified)
-summary(model)
 
 
+linear_pareto_fit <- function(data, group, factor, x, y){
+  data_subset = data %>% filter(data[,group] == factor)
+  data_subset$is.pareto <- pareto(data_subset, x, y)
+  model = lm(y ~ x, data = data %>% filter(is.pareto))
+  slope = model$coefficients[[x]]
+  intercept = model$coefficients[[1]]
+  return(c(intercept, slope))
+}
 
-t.test(l0~is_regular, data=frontiers%>%filter(epoch>1500))
+numerical_under_pareto <- function(data, group, factor, x, y){
+  data_subset = data %>% filter(data[,group] == factor)
+  data_subset$is.pareto <- pareto(data_subset, x, y)
+  pareto_points = filter(data_subset, is.pareto)
+  pareto_points = pareto_points[order(pareto_points[,x]),]
+  start = c(0, max(data_subset[,y]))
+  area = 0
+  
+  old_p = start
+  
+  for(row in  1:nrow(pareto_points)){
+    p = c(pareto_points[row, x], pareto_points[row, y])
+    dx = (p-old_p)[[1]]
+    trap_a = (dx * (p+old_p)[[2]])/2
+    area = area + trap_a
+    old_p = p
+    
+  }
+  
+  p = c(max(data_subset[,x]), old_p[[2]])
+  dx = (p-old_p)[[1]]
+  trap_a = (dx * (p+old_p)[[2]])/2
+  area = area + trap_a
+  return(area)
+}
 
+# pareto permutation test
 
+sh_area <- numerical_under_pareto(harmony, "lang", "sh", "l0", "loss")
 
+fl_area <- numerical_under_pareto(harmony, "lang", "fl", "l0", "loss")
 
+area_diff <- abs(sh_area-fl_area)
 
+area_diff_bigger <- rep(NA, 1000)
 
+for (i in 1:1000){
+  sample_harmony = harmony
+  sampled_lang = sample(harmony$lang)
+  sample_harmony$lang <- sampled_lang
+  sh_area <- numerical_under_pareto(sample_harmony, "lang", "sh", "l0", "loss")
+  
+  fl_area <- numerical_under_pareto(sample_harmony, "lang", "fl", "l0", "loss")
+  
+  is_bigger = abs(sh_area-fl_area) > area_diff
+  
+  area_diff_bigger[i] = abs(sh_area-fl_area) > area_diff
+  if(i %% 100 == 0){print(sum(area_diff_bigger,na.rm=TRUE) / i)}
+  
+}
 
-p_slope_diffs = permutation_test_slopes(frontiers_filtered, "l0", "log_loss", "lang" )
+print(sum(area_diff_bigger,na.rm=TRUE) / 1000)
+
+plot = ggplot(harmony, aes(x = l0, y = loss)) + geom_point(aes(color = epoch)) +xlab("Number of parameters")+ylab("Bernoulli Loss (log scale)") + theme_classic() + facet_wrap(~lang)
+plot + scale_y_continuous(breaks = c(10e-2, 10e-4, 10e-6, 10e-8), limits = c(10e-9,10e-1), trans="log2")

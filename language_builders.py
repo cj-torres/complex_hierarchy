@@ -748,3 +748,89 @@ def make_sh_branch_sets(N, p, split_p, reject_threshold):
     return LanguageData(*sh_train+sh_test)
 
 
+# Two Puzzles // Rawski, De Santo, Heinz // Stony Brook
+
+# L_12 = c* U ((aa)*bc)
+# What language will be preferred?
+
+def make_l12_word(n):
+    if not n:
+        return ""
+    if n % 2 == 1 or random.getrandbits(1):
+        return "c"*n
+    return "aa"*((n-2)//2)+"bc"
+
+
+def make_l12_words_redundant(N, p):
+    l12 = []
+    for i in range(N):
+        n = geometric(p)
+        l12.append(make_l12_word(n))
+    return l12
+
+
+def make_l12_sets(N, p, split_p, reject_threshold):
+    # generates N words in l12 with n sampled from a geometric distribution
+    # p geometric probability
+    # mean of geometric is 1/p
+    assert(split_p <= 1)
+    assert(N*(1-split_p) >= reject_threshold)
+    l12 = make_l12_words_redundant(N, p)
+    l12_train_in, l12_test_in = shuffler(l12, split_p, reject_threshold)
+    l12_train = to_tensors(l12_train_in)
+    l12_test = to_tensors(l12_test_in)
+
+    return LanguageData(*l12_train+l12_test)
+
+# Heinz and Idsardi 2013, p. 117
+
+
+def make_g1_word(n):
+    s = 0
+    w = ""
+    for _ in range(n):
+        w += (not s) * random.choice(["a", "b", "c"]) + s * random.choice(["a", "b"])
+        s = w[-1] == "a"
+    return w
+
+
+def make_g1_words_redundant(N, p):
+    g1 = []
+    for i in range(N):
+        n = geometric(p)
+        g1.append(make_g1_word(n))
+    return g1
+
+
+def make_g2_word(n):
+    s = 0
+    w = ""
+    for _ in range(n):
+        w += (not s) * random.choice(["a", "b", "c"]) + s * random.choice(["a", "b"])
+        s = s or w[-1] == "a"
+    return w
+
+
+def make_g2_words_redundant(N, p):
+    g2 = []
+    for i in range(N):
+        n = geometric(p)
+        g2.append(make_g2_word(n))
+    return g2
+
+
+def make_g3_word(n):
+    s = 0
+    w = ""
+    for _ in range(n):
+        w += (not s) * random.choice(["a", "b", "c"]) + s * random.choice(["a", "b"])
+        s = not (s == (w[-1] == "a"))
+    return w
+
+
+def make_g3_words_redundant(N, p):
+    g3 = []
+    for i in range(N):
+        n = geometric(p)
+        g3.append(make_g3_word(n))
+    return g3
