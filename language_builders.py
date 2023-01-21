@@ -753,12 +753,53 @@ def make_sh_branch_sets(N, p, split_p, reject_threshold):
 # L_12 = c* U ((aa)*bc)
 # What language will be preferred?
 
+def make_l13_word(n):
+    s1 = 0
+    s2 = 0
+    w = "S"
+    for _ in range(n):
+        c1 = (not s1) * ["a", "b", "c"] + s1 * ["a", "b"]
+        c2 = (not s2) * ["a", "b", "c"] + s2 * ["a", "b"]
+        c = [x for x in c1 if x in c2]
+        w += random.choice(c)
+        s1 = w[-1] == "a"
+        s2 = not (s2 == (w[-1] == "a"))
+    return w
+
+
+def make_l13_words_redundant(N, p):
+    l13 = []
+    for i in range(N):
+        n = geometric(p)
+        l13.append(make_l13_word(n))
+    return l13
+
+
+def make_l13_sets(N, p, split_p, reject_threshold):
+    # generates N words in l13 (intersection of l1 and with l3) n sampled from a geometric distribution
+    # p geometric probability
+    # mean of geometric is 1/p
+    assert(split_p <= 1)
+    assert(N*(1-split_p) >= reject_threshold)
+    l13 = make_l13_words_redundant(N, p)
+    l13_train_in, l13_test_in = shuffler(l13, split_p, reject_threshold)
+    l13_train = to_tensors(l13_train_in)
+    l13_test = to_tensors(l13_test_in)
+
+    return LanguageData(*l13_train+l13_test)
+
 def make_l12_word(n):
-    if not n:
-        return ""
-    if n % 2 == 1 or random.getrandbits(1):
-        return "c"*n
-    return "aa"*((n-2)//2)+"bc"
+    s1 = 0
+    s2 = 0
+    w = "S"
+    for _ in range(n):
+        c1 = (not s1) * ["a", "b", "c"] + s1 * ["a", "b"]
+        c2 = (not s2) * ["a", "b", "c"] + s2 * ["a", "b"]
+        c = [x for x in c1 if x in c2]
+        w += random.choice(c)
+        s1 = w[-1] == "a"
+        s2 = (s2 or (w[-1] == "a"))
+    return w
 
 
 def make_l12_words_redundant(N, p):
@@ -768,9 +809,8 @@ def make_l12_words_redundant(N, p):
         l12.append(make_l12_word(n))
     return l12
 
-
 def make_l12_sets(N, p, split_p, reject_threshold):
-    # generates N words in l12 with n sampled from a geometric distribution
+    # generates N words in l12 (intersection of l1 and with l3) n sampled from a geometric distribution
     # p geometric probability
     # mean of geometric is 1/p
     assert(split_p <= 1)
@@ -782,12 +822,80 @@ def make_l12_sets(N, p, split_p, reject_threshold):
 
     return LanguageData(*l12_train+l12_test)
 
+def make_l23_word(n):
+    s1 = 0
+    s2 = 0
+    w = "S"
+    for _ in range(n):
+        c1 = (not s1) * ["a", "b", "c"] + s1 * ["a", "b"]
+        c2 = (not s2) * ["a", "b", "c"] + s2 * ["a", "b"]
+        c = [x for x in c1 if x in c2]
+        w += random.choice(c)
+        s1 = not (s2 == (w[-1] == "a"))
+        s2 = (s2 or (w[-1] == "a"))
+    return w
+
+
+def make_l23_words_redundant(N, p):
+    l23 = []
+    for i in range(N):
+        n = geometric(p)
+        l23.append(make_l23_word(n))
+    return l23
+
+def make_l23_sets(N, p, split_p, reject_threshold):
+    # generates N words in l12 (intersection of l1 and with l3) n sampled from a geometric distribution
+    # p geometric probability
+    # mean of geometric is 1/p
+    assert(split_p <= 1)
+    assert(N*(1-split_p) >= reject_threshold)
+    l23 = make_l23_words_redundant(N, p)
+    l23 = l23[:1000]
+    l23_train_in, l23_test_in = shuffler(l23, split_p, reject_threshold)
+    l23_train = to_tensors(l23_train_in)
+    l23_test = to_tensors(l23_test_in)
+
+    return LanguageData(*l23_train+l23_test)
+
+#gramars
+
+def make_l1_sets(N, p, split_p, reject_threshold):
+    assert (split_p <= 1)
+    assert (N * (1 - split_p) >= reject_threshold)
+    l1 = make_g1_words_redundant(N, p)
+    l1_train_in, l1_test_in = shuffler(l1, split_p, reject_threshold)
+    l1_train = to_tensors(l1_train_in)
+    l1_test = to_tensors(l1_test_in)
+
+    return LanguageData(*l1_train + l1_test)
+
+def make_l2_sets(N, p, split_p, reject_threshold):
+    assert (split_p <= 1)
+    assert (N * (1 - split_p) >= reject_threshold)
+    l2 = make_g2_words_redundant(N, p)
+    l2_train_in, l2_test_in = shuffler(l2, split_p, reject_threshold)
+    l2_train = to_tensors(l2_train_in)
+    l2_test = to_tensors(l2_test_in)
+
+    return LanguageData(*l2_train + l2_test)
+
+
+def make_l3_sets(N, p, split_p, reject_threshold):
+    assert (split_p <= 1)
+    assert (N * (1 - split_p) >= reject_threshold)
+    l3 = make_g3_words_redundant(N, p)
+    l3_train_in, l3_test_in = shuffler(l3, split_p, reject_threshold)
+    l3_train = to_tensors(l3_train_in)
+    l3_test = to_tensors(l3_test_in)
+
+    return LanguageData(*l3_train + l3_test)
+
 # Heinz and Idsardi 2013, p. 117
 
 
 def make_g1_word(n):
     s = 0
-    w = ""
+    w = "S"
     for _ in range(n):
         w += (not s) * random.choice(["a", "b", "c"]) + s * random.choice(["a", "b"])
         s = w[-1] == "a"
@@ -804,10 +912,10 @@ def make_g1_words_redundant(N, p):
 
 def make_g2_word(n):
     s = 0
-    w = ""
+    w = "S"
     for _ in range(n):
         w += (not s) * random.choice(["a", "b", "c"]) + s * random.choice(["a", "b"])
-        s = s or w[-1] == "a"
+        s = (s or (w[-1] == "a"))
     return w
 
 
@@ -821,7 +929,7 @@ def make_g2_words_redundant(N, p):
 
 def make_g3_word(n):
     s = 0
-    w = ""
+    w = "S"
     for _ in range(n):
         w += (not s) * random.choice(["a", "b", "c"]) + s * random.choice(["a", "b"])
         s = not (s == (w[-1] == "a"))

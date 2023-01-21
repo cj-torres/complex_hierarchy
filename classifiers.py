@@ -412,6 +412,7 @@ def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patienc
             for param in model.parameters():
                 param.grad = None
             batch = torch.tensor(sample(indices, 8)).type(torch.LongTensor)
+            model.train()
             x = x_train[batch].to("cuda")
             y = y_train[batch].to("cuda")
             mask = mask_train[batch].to("cuda")
@@ -428,42 +429,47 @@ def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patienc
 
             op.step()
 
-            with torch.no_grad():
-                x_test = language_set.test_input.to("cuda")
-                y_test = language_set.test_output.to("cuda")
-                mask_test = language_set.test_mask.to("cuda")
+        if l0_regularized:
+            model.constrain_parameters()
 
-                y_test_hat = model(x_test)
-                test_mask = language_set.test_mask
-                loss_test = ce_loss(y_test_hat[test_mask], y_test[test_mask])
+        with torch.no_grad():
+            model.eval()
 
-                test_percent_correct = correct_guesses_seq(y_test, y_test_hat, mask_test)
+            x_test = language_set.test_input.to("cuda")
+            y_test = language_set.test_output.to("cuda")
+            mask_test = language_set.test_mask.to("cuda")
 
-                if loss_test >= best_loss:
-                    early_stop_counter += 1
-                    if early_stop_counter > patience:
-                        model.load_state_dict(torch.load("best_net_cache.ptr"))
-                        print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
-                              (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
-                        return model, loss_test, test_percent_correct, epoch
-                else:
-                    best_loss = loss_test
-                    early_stop_counter = 0
-                    percent_correct = test_percent_correct
-                    torch.save(model.state_dict(), "best_net_cache.ptr")
-                if l0_regularized:
-                    size = model.count_l0()
-                print((
-                                  "Epoch: %d, Accuracy: %s, loss: %s, counter: %d, train accuracy: %s" + ", network size: %s" * l0_regularized)
-                      % ((epoch, test_percent_correct.item(), loss_test.item(), early_stop_counter,
-                          train_percent_correct.item())
-                         + (size.item(),) * l0_regularized))
+            y_test_hat = model(x_test)
+            test_mask = language_set.test_mask
+            loss_test = ce_loss(y_test_hat[test_mask], y_test[test_mask])
 
-                if epoch % increment == 0:
-                    print("Saving epoch %d" % (epoch))
-                    yield model, loss_test, test_percent_correct, epoch
+            test_percent_correct = correct_guesses_seq(y_test, y_test_hat, mask_test)
 
-                epoch += 1
+        if loss_test >= best_loss:
+            early_stop_counter += 1
+            if early_stop_counter > patience:
+                model.load_state_dict(torch.load("best_net_cache.ptr"))
+                print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
+                      (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
+                return model, loss_test, test_percent_correct, epoch
+        else:
+            best_loss = loss_test
+            early_stop_counter = 0
+            percent_correct = test_percent_correct
+            torch.save(model.state_dict(), "best_net_cache.ptr")
+        if l0_regularized:
+            size = model.count_l0()
+        print((
+                          "Epoch: %d, Accuracy: %s, loss: %s, counter: %d, train accuracy: %s" + ", network size: %s" * l0_regularized)
+              % ((epoch, test_percent_correct.item(), loss_test.item(), early_stop_counter,
+                  train_percent_correct.item())
+                 + (size.item(),) * l0_regularized))
+
+        if epoch % increment == 0:
+            print("Saving epoch %d" % (epoch))
+            yield model, loss_test, test_percent_correct, epoch
+
+        epoch += 1
 
     print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
           (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
