@@ -23,9 +23,9 @@ frontiers = rbind(frontiers1, frontiers2, frontiers3, frontiers4, frontiers5, fr
 
 frontiers$model_num <- as.factor(frontiers$model_num)
 frontiers$lambda <- as.factor(frontiers$lambda)
-frontiers_filtered = frontiers %>% filter(((epoch>1000)|((lang=="abn") & (epoch>500)))&(accuracy>.995))%>% mutate(log_loss = log(loss)) %>% filter(is.finite(log_loss))
+frontiers_filtered = frontiers %>% filter(((epoch>1000)|((lang=="abn") & (epoch>500)))&(accuracy>.995))%>% mutate(log_loss = log(loss)) %>% filter(is.finite(log_loss)) %>% mutate(lang = as.factor(lang))
 frontiers_hulls = frontiers_filtered%>%select(lang,l0,loss)%>% group_by(lang) %>% slice(chull(l0,loss))
-plot = ggplot(frontiers_filtered, aes(x = l0, y = loss)) + geom_point(aes(color = "black")) +geom_point(data=frontiers_hulls, aes(color="red"))+xlab("Number of parameters")+ylab("Bernoulli Loss (log scale)") + theme_classic() + facet_wrap(~lang)
+plot = ggplot(frontiers_filtered, aes(x = l0, y = loss)) + geom_point() +xlab("Number of parameters")+ylab("Bernoulli Loss (log scale)") + theme_bw() + facet_wrap(~lang)
 plot + scale_y_continuous(breaks = c(10e-2, 10e-4, 10e-6, 10e-8), limits = c(10e-9,10e-1), trans="log2")
 
 analysis = manova(cbind(l0, loss) ~ lang, data=frontiers_filtered)
@@ -53,15 +53,27 @@ pareto <- function(data, x, y){
 }
 
 
+get_pareto <- function(data, group, x, y){
+  new_data = c()
+  for (factor in levels(data[,group])){
+    data_subset = data %>% filter(data[,group] == factor)
+    data_subset$is.pareto = pareto(data_subset, x, y)
+    new_data = rbind(new_data, data_subset)
+    
+  }
+  return(new_data)
+}
+
 
 linear_pareto_fit <- function(data, group, factor, x, y){
   data_subset = data %>% filter(data[,group] == factor)
   data_subset$is.pareto <- pareto(data_subset, x, y)
-  model = lm(y ~ x, data = data %>% filter(is.pareto))
-  slope = model$coefficients[[x]]
-  intercept = model$coefficients[[1]]
-  return(c(intercept, slope))
+  #return(data_subset)
+  model = lm(get(y) ~ get(x), data = data_subset %>% filter(is.pareto))
+  return(model)
 }
+
+
 
 numerical_under_pareto <- function(data, group, factor, x, y){
   data_subset = data %>% filter(data[,group] == factor)
@@ -118,3 +130,66 @@ print(sum(area_diff_bigger,na.rm=TRUE) / 1000)
 
 plot = ggplot(harmony, aes(x = l0, y = loss)) + geom_point(aes(color = epoch)) +xlab("Number of parameters")+ylab("Bernoulli Loss (log scale)") + theme_classic() + facet_wrap(~lang)
 plot + scale_y_continuous(breaks = c(10e-2, 10e-4, 10e-6, 10e-8), limits = c(10e-9,10e-1), trans="log2")
+
+reg_area <- numerical_under_pareto(frontiers_filtered, "is_regular", TRUE, "l0", "loss")
+
+nonreg_area <- numerical_under_pareto(frontiers_filtered, "is_regular", FALSE, "l0", "loss")
+
+area_diff <- abs(reg_area-nonreg_area)
+area_diff_bigger <- rep(NA, 1000)
+
+for (i in 1:1000){
+  sample_frontiers = frontiers_filtered
+  sampled_lang = sample(frontiers_filtered$is_regular)
+  sample_frontiers$is_regular <- sampled_lang
+  
+  reg_area <- numerical_under_pareto(sample_frontiers, "is_regular", TRUE, "l0", "loss")
+  nonreg_area <- numerical_under_pareto(sample_frontiers, "is_regular", FALSE, "l0", "loss")
+  
+  is_bigger = abs(reg_area-nonreg_area) > area_diff
+  
+  area_diff_bigger[i] = abs(reg_area-nonreg_area) > area_diff
+  if(i %% 100 == 0){print(sum(area_diff_bigger,na.rm=TRUE) / i)}
+  
+}
+
+
+
+#
+
+abn_area = numerical_under_pareto(frontiers_filtered, "lang", "abn", "l0", "loss")
+a2nb2m_area = numerical_under_pareto(frontiers_filtered, "lang", "a2nb2m", "l0", "loss")
+dyck_area = numerical_under_pareto(frontiers_filtered, "lang", "dyck", "l0", "loss")
+anbn_area = numerical_under_pareto(frontiers_filtered, "lang", "anbn", "l0", "loss")
+
+area_diff_bigger = matrix(data=NA,nrow=1000,ncol=6)
+
+areas = c(abn_area, a2nb2m_area, dyck_area, anbn_area)
+
+area_diffs = apply(combn(areas,2), 2, function(x) abs(x[[1]]-x[[2]]))
+
+for (i in 1:1000){
+  sample_frontiers = frontiers_filtered
+  sampled_lang = sample(frontiers_filtered$lang)
+  sample_frontiers$lang <- sampled_lang
+  
+  abn_area = numerical_under_pareto(frontiers_filtered, "lang", "abn", "l0", "loss")
+  a2nb2m_area = numerical_under_pareto(frontiers_filtered, "lang", "a2nb2m", "l0", "loss")
+  dyck_area = numerical_under_pareto(frontiers_filtered, "lang", "dyck", "l0", "loss")
+  anbn_area = numerical_under_pareto(frontiers_filtered, "lang", "anbn", "l0", "loss")
+  
+  areas = c(abn_area, a2nb2m_area, dyck_area, anbn_area)
+  
+  sampled_diffs = apply(combn(areas,2), 2, function(x) abs(x[[1]]-x[[2]]))
+  
+  area_diff_bigger[i,] = sampled_diffs > area_diffs
+  if(i %% 100 == 0){print(colSums(area_diff_bigger,na.rm=TRUE,dims=1) / i)}
+  
+}
+
+front_copy <- new_frontiers %>% filter(is.pareto) %>% filter(loss>0) %>% select(l0, loss, lang)
+for (factor in levels(front_copy$lang)){
+  front_copy = rbind(front_copy, data.frame(loss=c(.1,0), l0=c(0,100), lang=c(factor,factor)))
+  
+}
+
