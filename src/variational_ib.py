@@ -215,8 +215,7 @@ class RecursiveGaussianLSTM(torch.nn.Module):
     def decode(self, h):
         logits = self.decoder(h)
         # Remove probability mass from the pad token
-        logits[:, :, self.padding_idx] = -INF
-        return torch.log_softmax(logits, -1)
+        return logits
 
     def lm_loss(self, y, y_hat, mask):
         """
@@ -232,33 +231,26 @@ class RecursiveGaussianLSTM(torch.nn.Module):
         ce_loss = ce(y_hat[mask], y[mask])
         return ce_loss
 
-    def mi_loss(self, z_seq, h_seq, y, dist):
-        if self.va_z:
-            if dist == "h":
-                std_z = self.get_Z_h()
-            else:
-                std_z = self.get_Z_c()
-            mu_z = torch.zeros(self.hidden_size).to("cuda")
-            std = stats[1]
-            mu = stats[0]
-            mask = (y != self.padding_idx)
-            std_flat = std.contiguous()[mask, :]
-            mu_flat = mu.contiguous()[mask, :]
-            mi_loss = kl_divergence(mu_flat, std_flat, mu_z, std_z)
+    def mi_loss(self, c_seq, h_seq, c_log_probs, h_log_probs, mask):
+        c_seq_flat = c_seq[mask]
+        norm = torch.distributions.normal.Normal(torch.zeros_like(c_seq_flat[0]), torch.ones_like(c_seq_flat[0]))
 
-        else:
-            std = stats[1]  # stats[:,:,self.hidden_size:].contiguous()
-            mu = stats[0]  # [:, :, :self.hidden_size].contiguous()
-            mask = (y != self.padding_idx)
-            #n = mask.sum()
+        y_samples, log_dets = self.c_flow(c_seq_flat)
+        y_log_likelihood = norm.log_prob(y_samples).sum(dim=-1) + log_dets
 
-            std_flat = std.contiguous()[mask, :]  # B*TxH remove padded entries
-            mu_flat = mu.contiguous()[mask, :]  # B*TxH, ditto
+        kld = c_log_probs[mask] - y_log_likelihood
+        c_mi = kld.mean()
 
-            mi_loss = (-(1 / 2) * (std_flat.log().sum(dim=1) + self.hidden_size -
-                                   (mu_flat ** 2).sum(dim=1) - std_flat.sum(dim=1)))
+        h_seq_flat = h_seq[mask]
+        norm = torch.distributions.normal.Normal(torch.zeros_like(h_seq_flat[0]), torch.ones_like(h_seq_flat[0]))
 
-        return mi_loss.mean()
+        y_samples, log_dets = self.h_flow(h_seq_flat)
+        y_log_likelihood = norm.log_prob(y_samples).sum(dim=-1) + log_dets
+
+        kld = h_log_probs[mask] - y_log_likelihood
+        h_mi = kld.mean()
+
+        return c_mi, h_mi
 
 
 class GaussianLSTM(torch.nn.Module):
