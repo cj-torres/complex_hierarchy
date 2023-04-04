@@ -763,7 +763,7 @@ def make_l13_word(n):
         c = [x for x in c1 if x in c2]
         w += random.choice(c)
         s1 = w[-1] == "a"
-        s2 = not (s2 == (w[-1] == "a"))
+        s2 = not (s2 == (w[-1] == "a")) # flips state if sees a
     return w
 
 

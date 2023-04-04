@@ -50,8 +50,10 @@ class L0_Regularizer(torch.nn.Module):
         for name, weight in self.pre_parameters.items():
             if "bias" in name:
                 torch.nn.init.constant_(weight, 0.0)
-            else:
+            elif weight.data.ndimension() >= 2:
                 torch.nn.init.xavier_uniform_(weight)
+            else:
+                torch.nn.init.uniform_(weight, 0, 1)
 
         for name, weight in self.mask_parameters.items():
             torch.nn.init.normal_(weight, math.log(1 - self.droprate_init) - math.log(self.droprate_init), 1e-2)

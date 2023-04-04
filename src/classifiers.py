@@ -732,6 +732,77 @@ def seq_transformers_train(model, language_set, batch_sz, mask_percent, incremen
           (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
 
 
+def pfa_train(model, language_set, batch_sz, increment, max_epochs, lam, patience=float("inf")):
+    #with torch.autograd.set_detect_anomaly(True):
+    from math import ceil
+    from random import sample
+
+    model.to("cuda")
+
+    batches = len(language_set.train_input)
+    batch_q = ceil(batches / batch_sz)
+    batch_r = batches % batch_sz
+    indxs = [i * batch_sz for i in range(batch_q)]
+    indxs[-1] = indxs[-1] - batch_sz + batch_r
+
+    x_train = language_set.train_output # .to("cuda")
+
+    op = torch.optim.Adam(model.parameters(), lr=.03)
+    best_loss = torch.tensor([float('inf')]).squeeze()
+    early_stop_counter = 0
+
+    indices = range(batches)
+    epoch = 1
+    while epoch <= max_epochs:
+        for i in range(batch_sz // 2):
+            for param in model.parameters():
+                param.grad = None
+            batch = torch.tensor(sample(indices, 2)).type(torch.LongTensor)
+            model.train()
+            x = x_train[batch].to("cuda")
+
+            loss = -model(x)
+            loss.backward()
+
+            del x
+
+            op.step()
+            print("Sub-epoch")
+
+        with torch.no_grad():
+            model.eval()
+
+            x_test = language_set.test_output.to("cuda")
+
+            loss_test = model(x_test)
+
+        if loss_test >= best_loss:
+            early_stop_counter += 1
+            if early_stop_counter > patience:
+                model.load_state_dict(torch.load("best_net_cache.ptr"))
+                print("Best loss was: %s, Train loss: %s" %
+                      (best_loss.item(), loss_test.item()))
+                return model, loss_test, epoch
+        else:
+            best_loss = loss_test
+            early_stop_counter = 0
+            torch.save(model.state_dict(), "best_net_cache.ptr")
+        print((
+                      "Epoch: %d, loss: %s, counter: %d, train loss: %s")
+              % (epoch, loss_test.item(), early_stop_counter,
+                  loss_test.item()))
+
+        if epoch % increment == 0:
+            print("Saving epoch %d" % (epoch))
+            yield model, loss_test, epoch
+
+        epoch += 1
+
+    print("Best loss was: %s, Train loss: %s" %
+          (best_loss.item(), loss_test.item()))
+
+    return model, best_loss, epoch
+
 
 def random_split_no_overfit(x, y, length, r=.85):
     # should work, as all sets should be sorted

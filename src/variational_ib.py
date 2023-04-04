@@ -53,6 +53,214 @@ class GaussianSampler(torch.nn.Module):
         return sample, mu, std, log_probs
 
 
+class RGLSTM(torch.nn.Module):
+
+    def __init__(self, input_sz: int, hidden_sz: int):
+        super(RGLSTM, self).__init__(input_sz, hidden_sz)
+        self.h_gauss_sampler = GaussianSampler(hidden_sz)
+        self.c_gauss_sampler = GaussianSampler(hidden_sz)
+        self.init_weights()
+        self.input_sz = input_sz
+        self.hidden_size = hidden_sz
+
+        self.lstm = torch.nn.LSTM(
+            input_size=self.input_sz,
+            hidden_size=self.hidden_size,
+            num_layers=1,
+            batch_first=True
+        )
+
+    def init_weights(self):
+        for p in self.parameters():
+            if p.data.ndimension() >= 2:
+                torch.nn.init.xavier_uniform_(p.data)
+            else:
+                torch.nn.init.zeros_(p.data)
+
+    def forward(self, x: torch.Tensor,
+                init_states=None):
+        """Assumes x is of shape (batch, sequence, feature)"""
+        bs, seq_sz, _ = x.size()
+        h_mus = []
+        h_stds = []
+        c_mus = []
+        c_stds = []
+
+        if init_states is None:
+            h_t, c_t = (torch.stack([torch.zeros(self.hidden_size).to(x.device)]*bs, dim=1),
+                        torch.stack([torch.zeros(self.hidden_size).to(x.device)]*bs, dim=1))
+        else:
+            h_t, c_t = init_states
+
+        h_seq = []
+        c_seq = []
+        h_probs = []
+        c_probs = []
+        h_t = h_t.unsqueeze(dim=0)
+        c_t = c_t.unsqueeze(dim=0)
+
+        c_t, c_mu, c_std, c_log_probs = self.h_gauss_sampler(c_t)
+        c_mus.append(c_mu.squeeze(dim=0))
+        c_stds.append(c_std.squeeze(dim=0))
+        c_probs.append(c_log_probs)
+        h_t, h_mu, h_std, h_log_probs = self.h_gauss_sampler(h_t)
+        h_mus.append(h_mu.squeeze(dim=0))
+        h_probs.append(h_log_probs)
+        h_stds.append(h_std.squeeze(dim=0))
+
+        for t in range(seq_sz):
+            x_t = x[:, t, :]
+            output, (out_h, out_c) = self.lstm(x_t.unsqueeze(dim=1), (h_t, c_t))
+            h_t, h_mu, h_std, h_log_probs = self.h_gauss_sampler(out_h)
+            c_t, c_mu, c_std, c_log_probs = self.c_gauss_sampler(out_c)
+            h_mus.append(h_mu.squeeze(dim=0))
+            h_stds.append(h_std.squeeze(dim=0))
+            h_probs.append(h_log_probs.squeeze(dim=0))
+            c_mus.append(c_mu.squeeze(dim=0))
+            c_stds.append(c_std.squeeze(dim=0))
+            c_probs.append(c_log_probs.squeeze(dim=0))
+            h_seq.append(h_t)
+            c_seq.append(c_t)
+
+        h_seq = torch.stack(h_seq, dim=1)
+        c_seq = torch.stack(c_seq, dim=1)
+        h_probs = torch.stack(h_probs, dim=1)
+        c_probs = torch.stack(c_probs, dim=1)
+        h_mus = torch.stack(h_mus, dim=1) #.transpose(0, 1).contiguous()
+        h_stds = torch.stack(h_stds, dim=1) #.transpose(0, 1).contiguous()
+        c_mus = torch.stack(c_mus, dim=1) #.transpose(0, 1).contiguous()
+        c_stds = torch.stack(c_stds, dim=1) #.transpose(0, 1).contiguous()
+        # reshape from shape (sequence, batch, feature) to (batch, sequence, feature)
+        return h_seq, c_seq, h_probs, c_probs, ((h_mus, h_stds), (c_mus, c_stds)), (h_t, c_t)
+
+
+class RecursiveGaussianLSTM(torch.nn.Module):
+    def __init__(self, vocab_size, embedding_dim, num_layers, hidden_size, noise, n_flows, n_layers):
+        super().__init__()
+
+        self.vocab_size = vocab_size
+        self.embedding_dim = embedding_dim
+        self.num_layers = num_layers
+        self.hidden_size = hidden_size
+        self.noise = noise
+        self.c_flow = create_model(hidden_size, hidden_size, n_flows, n_layers)
+        self.h_flow = create_model(hidden_size, hidden_size, n_flows, n_layers)
+
+        self.__build_model()
+
+    def __build_model(self):
+        self.word_embedding = torch.nn.Embedding(
+            num_embeddings=self.vocab_size,
+            embedding_dim=self.embedding_dim,
+            padding_idx=self.padding_idx
+        )
+
+        # For the creation of multi-layer LSTMs
+        g = [RGLSTM(self.embedding_dim, self.hidden_size)]
+        g.extend(
+            [RGLSTM(self.hidden_size, self.hidden_size) for _ in range(1, self.num_layers)])
+
+
+        self.glstm_layers = torch.nn.ModuleList(g)
+
+        self.initial_state = torch.nn.Parameter(torch.stack(
+            [torch.randn(self.num_layers, self.hidden_size),
+             torch.randn(self.num_layers, self.hidden_size)]
+        ))
+
+        self.decoder = torch.nn.Linear(self.hidden_size, self.vocab_size)
+
+    def get_initial_state(self, batch_size):
+        init_a, init_b = self.initial_state
+        return torch.stack([init_a] * batch_size, dim=-2), torch.stack([init_b] * batch_size, dim=-2)  # L x B x H
+
+    def encode(self, X):
+        # X is of shape B x T
+        # To add: logic to make flag choice of "c"/"h" better
+        batch_size, seq_len = X.shape
+        embedding = self.word_embedding(X)
+        init_h, init_c = self.get_initial_state(batch_size)  # init_h is L x B x H
+        c_mus = []
+        h_mus = []
+        h_stds = []
+        c_stds = []
+        seq = embedding
+        for i, layer in enumerate(self.glstm_layers):
+            seq, ((h_mu, h_std), (c_mu, c_std)), (_, __) = layer(seq, (init_h[i], init_c[i]))
+            c_mus.append(c_mu)
+            c_stds.append(c_std)
+            h_mus.append(h_mu)
+            h_stds.append(h_std)
+
+        # If noise flag "h"/"c", transforms them, otherwise don't touch because it's a NoneType
+
+        if self.noise == "c" or self.noise == "both":
+            c_mus = torch.cat(c_mus, Dim.feature)[:, 0:-1, :]
+            c_stds = torch.cat(c_stds, Dim.feature)[:, 0:-1, :]
+
+        if self.noise == "h" or self.noise == "both":
+            h_mus = torch.cat(h_mus, Dim.feature)[:, 0:-1, :]
+            h_stds = torch.cat(h_stds, Dim.feature)[:, 0:-1, :]
+
+        c_dists = (c_mus, c_stds)
+        h_dists = (h_mus, h_stds)
+
+        # Also need to include the initial state itself
+        # And the last state is after consuming EOS, so it doesn't matter
+        # So add the initial state in first, and remove the final state
+        seq = torch.cat((init_h[-1].unsqueeze(-2), seq), dim=-2)[:, 0:-1, :]
+
+        return seq, (h_dists, c_dists)
+
+    def decode(self, h):
+        logits = self.decoder(h)
+        # Remove probability mass from the pad token
+        logits[:, :, self.padding_idx] = -INF
+        return torch.log_softmax(logits, -1)
+
+    def lm_loss(self, y, y_hat, mask):
+        """
+        Just the cross entropy loss
+        :param y: Target tensor
+        :param y_hat: Output tensor
+        :param mask: Mask selecting only relevant entries for the loss
+        :return: Cross entropy
+        """
+        ce = torch.nn.CrossEntropyLoss()
+        # Y contains the target token indices. Shape B x T
+        # Y_hat contains distributions
+        ce_loss = ce(y_hat[mask], y[mask])
+        return ce_loss
+
+    def mi_loss(self, z_seq, h_seq, y, dist):
+        if self.va_z:
+            if dist == "h":
+                std_z = self.get_Z_h()
+            else:
+                std_z = self.get_Z_c()
+            mu_z = torch.zeros(self.hidden_size).to("cuda")
+            std = stats[1]
+            mu = stats[0]
+            mask = (y != self.padding_idx)
+            std_flat = std.contiguous()[mask, :]
+            mu_flat = mu.contiguous()[mask, :]
+            mi_loss = kl_divergence(mu_flat, std_flat, mu_z, std_z)
+
+        else:
+            std = stats[1]  # stats[:,:,self.hidden_size:].contiguous()
+            mu = stats[0]  # [:, :, :self.hidden_size].contiguous()
+            mask = (y != self.padding_idx)
+            #n = mask.sum()
+
+            std_flat = std.contiguous()[mask, :]  # B*TxH remove padded entries
+            mu_flat = mu.contiguous()[mask, :]  # B*TxH, ditto
+
+            mi_loss = (-(1 / 2) * (std_flat.log().sum(dim=1) + self.hidden_size -
+                                   (mu_flat ** 2).sum(dim=1) - std_flat.sum(dim=1)))
+
+        return mi_loss.mean()
+
+
 class GaussianLSTM(torch.nn.Module):
     """
     LSTM with a sampling layer on the output
