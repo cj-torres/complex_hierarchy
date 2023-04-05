@@ -147,7 +147,7 @@ if not os.path.isdir(models_dir):
 
 vib_intersection_test(N, "{}/l13_lstm".format(models_dir), "{}/l13_lstm".format(new_dir), lb.make_l13_sets, lambdas,
                         epochs, [lb.make_l1_sets, lb.make_l3_sets], ["l1", "l3"],
-                        *(5, 3, 5, 5, 5, 2, 2), **{"N": 2000, "p": .05, "reject_threshold": 200, "split_p": .795})
+                        *(5, 3, 5, 5, 2, 2), **{"N": 2000, "p": .05, "reject_threshold": 200, "split_p": .795})
 
 new_dir = "LSTM-Output-{}".format(str(date.today()))
 if not os.path.isdir(new_dir):
