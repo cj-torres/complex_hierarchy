@@ -71,24 +71,47 @@ class PFA(torch.nn.Module):
         xs = xs[mask].split(valid.tolist())
 
 
-        prob = torch.tensor([1.]).to(device)
-        for seq in xs:
-          K = len(seq)
-          chart = torch.zeros(self.num_states, K + 1).to(device)
-          for t in reversed(range(K + 1)):
-            for q_ in range(self.num_states):
-              if t == K:
-                chart[q_, t] = entmax.sparsemax(self.omega, dim=-1)[q_]
-              else:
-                chart[q_, t] = entmax.sparsemax(self.E, dim=-1)[q_, seq[t]] * \
-                               (entmax.sparsemax(self.T, dim=-1)[q_, seq[t]] @
-                               chart[:, t + 1].clone()).sum()
-            #breakpoint()
-          prob *= entmax.sparsemax(self.alpha, dim=-1) @ chart[:, 0].clone()
-          #if total_nll <= 0:
-          #    breakpoint()
-          print(prob)
-        return prob
+        if self.training:
+            prob = torch.tensor([0.]).to(device)
+            for seq in xs:
+              K = len(seq)
+              chart = torch.zeros(self.num_states, K + 1).to(device)
+              for t in reversed(range(K + 1)):
+                for q_ in range(self.num_states):
+                  if t == K:
+                    chart[q_, t] = entmax.sparsemax_loss(self.omega, torch.tensor([q_]))
+                  else:
+                    chart[q_, t] = entmax.sparsemax_loss(self.E[q_], torch.tensor([seq[t]])) + \
+                                   (entmax.sparsemax_loss(self.T[q_, seq[t]],
+                                                          torch.arange(self.num_states, dtype=torch.long)) +
+                                   chart[:, t + 1].clone()).logsumexp(dim=-1)
+                #breakpoint()
+              prob += entmax.sparsemax_loss(self.alpha, torch.arange(self.num_states, dtype=torch.long)) + \
+                      chart[:, 0].clone()
+              #if total_nll <= 0:
+              #    breakpoint()
+              print(prob)
+            return prob
+
+        else:
+            prob = torch.tensor([0.]).to(device)
+            for seq in xs:
+              K = len(seq)
+              chart = torch.zeros(self.num_states, K + 1).to(device)
+              for t in reversed(range(K + 1)):
+                for q_ in range(self.num_states):
+                  if t == K:
+                    chart[q_, t] = torch.log(entmax.sparsemax(self.omega, dim=-1)[q_])
+                  else:
+                    chart[q_, t] = torch.log(entmax.sparsemax(self.E, dim=-1)[q_, seq[t]]) + \
+                                   (torch.log(entmax.sparsemax(self.T, dim=-1)[q_, seq[t]]) @
+                                   chart[:, t + 1].clone()).logsumexp(dim=-1)
+                #breakpoint()
+              prob += torch.log(entmax.sparsemax(self.alpha, dim=-1) @ chart[:, 0].clone())
+              #if total_nll <= 0:
+              #    breakpoint()
+              print(prob)
+            return prob
 
 
 def inverse_softplus(x, beta=torch.tensor([10.]), threshold = .5):
