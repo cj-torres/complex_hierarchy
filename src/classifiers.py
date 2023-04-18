@@ -6,6 +6,7 @@ import language_builders as lb
 import csv
 from random import shuffle
 from random import sample
+from copy import deepcopy
 import torch
 import mdl_tools as mdl
 import variational_ib as vib
@@ -342,7 +343,7 @@ def train(model, x_train, y_train, lengths_train, x_test, y_test, lengths_test, 
 
 
 def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patience=float("inf"),
-                     l0_regularized=False):
+                     l0_regularized=False, sub_batch_sz=8):
     from math import ceil
     from random import sample
 
@@ -372,31 +373,33 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
     epoch = 1
     size = torch.tensor([0])
     while epoch <= max_epochs:
-        for i in range(batch_sz//8):
-            for param in model.parameters():
-                param.grad = None
-            batch = torch.tensor(sample(indices, 8)).type(torch.LongTensor)
-            model.train()
-            x = x_train[batch].to("cuda")
-            y = y_train[batch].to("cuda")
-            mask = mask_train[batch].to("cuda")
-            y_hat = model(x)
-            loss = bernoulli_loss_cont(y, y_hat, mask)
+        temp_indices = list(deepcopy(indices))
+        shuffle(temp_indices)
+        batches = batch_split(temp_indices, batch_sz)
+        for batch in batches:
+            for sub_batch in batch_split(batch, sub_batch_sz):
+                sub_batch_tens = torch.tensor(sub_batch).type(torch.LongTensor)
+                model.train()
+                x = x_train[sub_batch_tens].to("cuda")
+                y = y_train[sub_batch_tens].to("cuda")
+                mask = mask_train[sub_batch_tens].to("cuda")
+                y_hat = model(x)
+                loss = bernoulli_loss_cont(y, y_hat, mask)
 
-            #breakpoint()
+                #breakpoint()
 
-            if l0_regularized:
-                re_loss = model.regularization()
-                loss = loss + re_loss
-            loss.backward()
-            train_percent_correct = correct_guesses_batch_seq(y, y_hat, mask)
+                if l0_regularized:
+                    re_loss = model.regularization()
+                    loss = loss + re_loss
+                loss.backward()
+                train_percent_correct = correct_guesses_batch_seq(y, y_hat, mask)
 
-            del mask, x, y
+                del mask, x, y
 
-            op.step()
+                op.step()
 
-        if l0_regularized:
-            model.constrain_parameters()
+                if l0_regularized:
+                    model.constrain_parameters()
 
         with torch.no_grad():
             model.eval()
@@ -469,26 +472,30 @@ def vib_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, pat
 
     epoch = 1
     while epoch <= max_epochs:
-        for param in model.parameters():
-            param.grad = None
-        batch = torch.tensor(sample(indices, batch_sz)).type(torch.LongTensor)
-        model.train()
-        x = x_train[batch].to("cuda")
-        y = y_train[batch].to("cuda")
-        mask = mask_train[batch].to("cuda")
-        y_hat, h_stats, h_seq, log_probs = model(x)
+        temp_indices = list(deepcopy(indices))
+        shuffle(temp_indices)
+        batches = batch_split(temp_indices, batch_sz)
+        for batch in batches:
+            for param in model.parameters():
+                param.grad = None
+            batch_tens = torch.tensor(batch).type(torch.LongTensor)
+            model.train()
+            x = x_train[batch_tens].to("cuda")
+            y = y_train[batch_tens].to("cuda")
+            mask = mask_train[batch_tens].to("cuda")
+            y_hat, h_stats, h_seq, log_probs = model(x)
 
-        ce_loss = model.lm_loss(y, y_hat, mask)
-        mi_loss = model.mi_loss(h_seq, log_probs, mask)
+            ce_loss = model.lm_loss(y, y_hat, mask)
+            mi_loss = model.mi_loss(h_seq, log_probs, mask)
 
-        loss = ce_loss + lam * mi_loss
+            loss = ce_loss + lam * mi_loss
 
-        loss.backward()
-        train_percent_correct = correct_guesses_seq(y, y_hat, mask)
+            loss.backward()
+            train_percent_correct = correct_guesses_seq(y, y_hat, mask)
 
-        del mask, x, y
+            del mask, x, y
 
-        op.step()
+            op.step()
 
         with torch.no_grad():
             model.eval()
@@ -534,7 +541,7 @@ def vib_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, pat
     return model, best_loss, mi_test, percent_correct, epoch
 
 
-def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patience=float("inf"), l0_regularized=False):
+def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patience=float("inf"), l0_regularized=False, sub_batch_sz = 8):
     from math import ceil
     from random import sample
 
@@ -565,29 +572,33 @@ def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patienc
     #test_percent_correct = 0
     epoch = 1
     while epoch <= max_epochs:
-        for i in range(batch_sz // 8):
-            for param in model.parameters():
-                param.grad = None
-            batch = torch.tensor(sample(indices, 8)).type(torch.LongTensor)
-            model.train()
-            x = x_train[batch].to("cuda")
-            y = y_train[batch].to("cuda")
-            mask = mask_train[batch].to("cuda")
-            y_hat = model(x)
+        temp_indices = list(deepcopy(indices))
+        shuffle(temp_indices)
+        batches = batch_split(temp_indices, batch_sz)
+        for batch in batches:
+            for sub_batch in batch_split(batch, sub_batch_sz):
+                for param in model.parameters():
+                    param.grad = None
+                sub_batch_tens = torch.tensor(sub_batch).type(torch.LongTensor)
+                model.train()
+                x = x_train[sub_batch_tens].to("cuda")
+                y = y_train[sub_batch_tens].to("cuda")
+                mask = mask_train[sub_batch_tens].to("cuda")
+                y_hat = model(x)
 
-            loss = ce_loss(y_hat[mask], y[mask])
-            if l0_regularized:
-                re_loss = model.regularization()
-                loss = loss + re_loss
-            loss.backward()
-            train_percent_correct = correct_guesses_seq(y, y_hat, mask)
+                loss = ce_loss(y_hat[mask], y[mask])
+                if l0_regularized:
+                    re_loss = model.regularization()
+                    loss = loss + re_loss
+                loss.backward()
+                train_percent_correct = correct_guesses_seq(y, y_hat, mask)
 
-            del mask, x, y
+                del mask, x, y
 
-            op.step()
+                op.step()
 
-        if l0_regularized:
-            model.constrain_parameters()
+                if l0_regularized:
+                    model.constrain_parameters()
 
         with torch.no_grad():
             model.eval()
@@ -614,6 +625,7 @@ def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patienc
             early_stop_counter = 0
             percent_correct = test_percent_correct
             torch.save(model.state_dict(), "best_net_cache.ptr")
+        size = torch.tensor([0])
         if l0_regularized:
             size = model.count_l0()
         print((
@@ -737,7 +749,7 @@ def pfa_train(model, language_set, batch_sz, increment, max_epochs, lam, patienc
     from math import ceil
     from random import sample
 
-    model.to("cuda")
+    #model #.to("cuda")
 
     batches = len(language_set.train_input)
     batch_q = ceil(batches / batch_sz)
@@ -754,25 +766,25 @@ def pfa_train(model, language_set, batch_sz, increment, max_epochs, lam, patienc
     indices = range(batches)
     epoch = 1
     while epoch <= max_epochs:
-        for i in range(batch_sz // 2):
-            for param in model.parameters():
-                param.grad = None
-            batch = torch.tensor(sample(indices, 2)).type(torch.LongTensor)
-            model.train()
-            x = x_train[batch].to("cuda")
+        #for i in range(batch_sz // 16):
+        for param in model.parameters():
+            param.grad = None
+        batch = torch.tensor(sample(indices, batch_sz)).type(torch.LongTensor)
+        model.train()
+        x = x_train[batch] #.to("cuda")
 
-            loss = -model(x)
-            loss.backward()
+        loss = model(x)
+        loss.backward()
 
-            del x
+        del x
 
-            op.step()
-            print("Sub-epoch")
+        op.step()
+        #print("Sub-epoch")
 
         with torch.no_grad():
             model.eval()
 
-            x_test = language_set.test_output.to("cuda")
+            x_test = language_set.test_output #.to("cuda")
 
             loss_test = model(x_test)
 
@@ -890,81 +902,9 @@ def gauss_fit(x):
     return torch.distributions.Normal(mu, sigma2)
 
 
-
-
-
-
-
-
-
-
-
-# if __name__ == '__main__':
-#     x, y, lengths = lb.make_dyck1_io(5000)
-#     accuracy =  []
-#     with open('dyck1_model_c_lstm2.csv', 'w', newline='') as csvfile:
-#         writer = csv.writer(csvfile)
-#         for i in range(1000):
-#             print("Model %d" % (i+1))
-#             model = LSTMBranchSequencer(3, 2, 6, 4)
-#             x1, y1, lengths1 = set_normalize(x, y, lengths)
-#             (x1, y1, lengths1), (x_t, y_t, lengths_t) = random_split(x, y, lengths)
-#             model, best_loss = train(model, x1, y1, lengths1, x_t, y_t, lengths_t, 200)
-#             weights = model_to_list(model)
-#             writer.writerow(weights)
-#             accuracy.append(best_loss.item())
-#     with open('dyck1_model_c_lstm_loss2.csv', 'w', newline='') as accuracy_file:
-#         writer = csv.writer(csvfile)
-#         writer.writerows([[a] for a in accuracy])
-#
-#     x, y, lengths = lb.make_anbn_io(5000)
-#     accuracy = []
-#     with open('anbn_model_c_lstm2.csv', 'w', newline='') as csvfile:
-#         writer = csv.writer(csvfile)
-#         for i in range(1000):
-#             print("Model %d" % (i+1))
-#             model = LSTMBranchSequencer(3, 2, 6, 4)
-#             x1, y1, lengths1 = set_normalize(x, y, lengths)
-#             (x1, y1, lengths1), (x_t, y_t, lengths_t) = random_split(x, y, lengths)
-#             model, best_loss = train(model, x1, y1, lengths1, x_t, y_t, lengths_t, 200)
-#             weights = model_to_list(model)
-#             writer.writerow(weights)
-#             accuracy.append(best_loss.item())
-#     with open('anbn_model_c_lstm_loss2.csv', 'w', newline='') as accuracy_file:
-#         writer = csv.writer(csvfile)
-#         writer.writerows([[a] for a in accuracy])
-    # x, y, lengths = lb.make_io(lb.anbm)
-    # accuracy = []
-    # with open('anbm_model_r_lstm.csv', 'w', newline='') as csvfile:
-    #     writer = csv.writer(csvfile)
-    #     for i in range(1000):
-    #         print("Model %d" % (i+1))
-    #         model = LSTMCLassifier(3, 2, 10, 8)
-    #         x1, y1, lengths1 = set_normalize(x, y, lengths)
-    #         (x1, y1, lengths1), (x_t, y_t, lengths_t) = random_split(x, y, lengths)
-    #         model, best_loss = train(model, x1, y1, lengths1, x_t, y_t, lengths_t, 200)
-    #         weights = model_to_list(model)
-    #         writer.writerow(weights)
-    #         accuracy.append(best_loss.item())
-    # with open('anbm_model_r_lstm_loss.csv', 'w', newline='') as accuracy_file:
-    #     writer = csv.writer(csvfile)
-    #     writer.writerows([[a] for a in accuracy])
-    # x, y, lengths = lb.make_io(lb.abn)
-    # accuracy = []
-    # with open('abn_model_r_lstm.csv', 'w', newline='') as csvfile:
-    #     writer = csv.writer(csvfile)
-    #     for i in range(1000):
-    #         print("Model %d" % (i + 1))
-    #         model = LSTMCLassifier(3, 2, 10, 8)
-    #         x1, y1, lengths1 = set_normalize(x, y, lengths)
-    #         (x1, y1, lengths1), (x_t, y_t, lengths_t) = random_split(x, y, lengths)
-    #         model, best_loss = train(model, x1, y1, lengths1, x_t, y_t, lengths_t, 200)
-    #         weights = model_to_list(model)
-    #         writer.writerow(weights)
-    #         accuracy.append(best_loss.item())
-    # with open('abn_model_r_lstm_loss.csv', 'w', newline='') as accuracy_file:
-    #     writer = csv.writer(csvfile)
-    #     writer.writerows([[a] for a in accuracy])
+def batch_split(indices, batch_sz):
+    for i in range(0, len(indices), batch_sz):
+        yield indices[i:min(i+batch_sz, len(indices))]
 
 
 

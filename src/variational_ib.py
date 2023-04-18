@@ -169,6 +169,11 @@ class RecursiveGaussianRNN(torch.nn.Module):
 
         return h_mi
 
+    def forward(self, X):
+        h_seq, h_probs, h_dists = self.encode(X)
+        y_hat = self.decode(h_seq)
+        return y_hat, h_dists, h_seq, h_probs
+
 
 
 class RGLSTM(torch.nn.Module):
@@ -312,6 +317,9 @@ class RecursiveGaussianLSTM(torch.nn.Module):
 
         return c_mi, h_mi
 
+    #def forward(self, x):
+
+
 
 class GaussianLSTM(torch.nn.Module):
     """
@@ -374,11 +382,6 @@ class SequentialVariationalIB(torch.nn.Module):
         )
 
         self.lstm = GaussianLSTM(self.embedding_dim, self.hidden_size, 1)
-
-        self.initial_state = torch.nn.Parameter(torch.stack(
-            [torch.randn(self.num_layers, self.hidden_size),
-             torch.randn(self.num_layers, self.hidden_size)]
-        ))
 
         self.final_layer = torch.nn.Linear(self.noise_size, self.final_layer_sz)
         self.decoder = torch.nn.Linear(self.final_layer_sz, self.vocab_size)

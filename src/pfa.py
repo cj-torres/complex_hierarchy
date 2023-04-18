@@ -8,8 +8,8 @@ class PFA(torch.nn.Module):
         X = num_states
         self.num_states = num_states
         self.vocab_size = vocab_size
-        self.alpha = torch.nn.Parameter(torch.FloatTensor(Q))
-        self.omega = torch.nn.Parameter(torch.FloatTensor(Q))
+        self.alpha = torch.nn.Parameter(torch.FloatTensor(Q).unsqueeze(dim=0))
+        self.omega = torch.nn.Parameter(torch.FloatTensor(Q).unsqueeze(dim=0))
         self.E_shape = (Q, X)
         self.T_shape = (X, Q, Q)
         self.E = torch.nn.Parameter(torch.FloatTensor(*self.E_shape))
@@ -81,13 +81,16 @@ class PFA(torch.nn.Module):
                   if t == K:
                     chart[q_, t] = entmax.sparsemax_loss(self.omega, torch.tensor([q_]))
                   else:
-                    chart[q_, t] = entmax.sparsemax_loss(self.E[q_], torch.tensor([seq[t]])) + \
-                                   (entmax.sparsemax_loss(self.T[q_, seq[t]],
-                                                          torch.arange(self.num_states, dtype=torch.long)) +
+                    chart[q_, t] = entmax.sparsemax_loss(self.E[q_:q_+1], torch.tensor([seq[t]])) + \
+                                   (entmax.sparsemax_loss(self.T[q_:q_+1, seq[t]].expand(self.num_states, self.num_states),
+                                                          torch.arange(self.num_states,
+                                                                       dtype=torch.long)) +
                                    chart[:, t + 1].clone()).logsumexp(dim=-1)
                 #breakpoint()
-              prob += entmax.sparsemax_loss(self.alpha, torch.arange(self.num_states, dtype=torch.long)) + \
-                      chart[:, 0].clone()
+              #breakpoint()
+              prob += (entmax.sparsemax_loss(self.alpha.expand(self.num_states, self.num_states), torch.arange(self.num_states,
+                                                                     dtype=torch.long)) + \
+                      chart[:, 0].clone()).logsumexp(dim=-1)
               #if total_nll <= 0:
               #    breakpoint()
               print(prob)
@@ -101,13 +104,13 @@ class PFA(torch.nn.Module):
               for t in reversed(range(K + 1)):
                 for q_ in range(self.num_states):
                   if t == K:
-                    chart[q_, t] = torch.log(entmax.sparsemax(self.omega, dim=-1)[q_])
+                    chart[q_, t] = torch.log(entmax.sparsemax(self.omega, dim=-1)[:, q_])
                   else:
                     chart[q_, t] = torch.log(entmax.sparsemax(self.E, dim=-1)[q_, seq[t]]) + \
-                                   (torch.log(entmax.sparsemax(self.T, dim=-1)[q_, seq[t]]) @
+                                   (torch.log(entmax.sparsemax(self.T, dim=-1)[q_, seq[t]]) +
                                    chart[:, t + 1].clone()).logsumexp(dim=-1)
                 #breakpoint()
-              prob += torch.log(entmax.sparsemax(self.alpha, dim=-1) @ chart[:, 0].clone())
+              prob += torch.log((entmax.sparsemax(self.alpha, dim=-1) + chart[:, 0].clone()).logsumexp(dim=-1))
               #if total_nll <= 0:
               #    breakpoint()
               print(prob)
