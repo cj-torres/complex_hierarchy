@@ -193,7 +193,7 @@ class LSTMSequencer(torch.nn.Module):
         final = self.final_transform(self.final_layer(seq))
         out = self.out(final)
 
-        return out.squeeze()
+        return out #.squeeze()
 
 
 class RNNSequencer(torch.nn.Module):
@@ -226,7 +226,7 @@ class RNNSequencer(torch.nn.Module):
         final = self.final_transform(self.final_layer(seq))
         out = self.out(final)
 
-        return out.squeeze()
+        return out #.squeeze()
 
 
 class PositionalEncoding(torch.nn.Module):
@@ -587,6 +587,7 @@ def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patienc
                 y_hat = model(x)
 
                 loss = ce_loss(y_hat[mask], y[mask])
+               # print(loss.item())
                 if l0_regularized:
                     re_loss = model.regularization()
                     loss = loss + re_loss
