@@ -372,6 +372,7 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
     train_percent_correct = 0
     epoch = 1
     size = torch.tensor([0])
+    torch.save(model.state_dict(), "best_net_cache.ptr")
     while epoch <= max_epochs:
         temp_indices = list(deepcopy(indices))
         shuffle(temp_indices)
@@ -410,20 +411,27 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
 
             y_test_hat = model(x_test)
             loss_test = bernoulli_loss_cont(y_test, y_test_hat, mask_test)
+            loss_test_unr = loss_test.clone()
+            if l0_regularized:
+                re_loss = model.regularization()
+                loss_test = loss + re_loss
 
             test_percent_correct = correct_guesses_batch_seq(y_test, y_test_hat, mask_test)
 
             del x_test, y_test, mask_test
 
-        if loss_test >= best_loss:
+        if loss_test >= best_loss or loss.isnan().any():
             early_stop_counter += 1
-            if early_stop_counter > patience:
-                model.load_state_dict(torch.load("best_net_cache.ptr"))
-                print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
-                      (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
-                return model, loss_test, test_percent_correct, epoch
+            if early_stop_counter > patience or loss.isnan().any():
+                break
+                #model.load_state_dict(torch.load("best_net_cache.ptr"))
+                #print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
+                #      (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
+                #return model, best_test_loss, test_percent_correct, best_epoch
         else:
             best_loss = loss_test
+            best_test_loss = loss_test_unr
+            best_epoch = epoch
             early_stop_counter = 0
             percent_correct = test_percent_correct
             torch.save(model.state_dict(), "best_net_cache.ptr")
@@ -435,15 +443,15 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
 
         if epoch % increment == 0:
             print("Saving epoch %d" % (epoch))
-            yield model, loss_test, test_percent_correct, epoch
+            yield model, loss_test_unr, test_percent_correct, epoch
 
 
         epoch+=1
 
     print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
           (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
-
-    return model, best_loss, percent_correct, epoch
+    model.load_state_dict(torch.load("best_net_cache.ptr"))
+    yield model, best_test_loss, percent_correct, best_epoch
 
 
 def vib_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patience=float("inf")):
@@ -464,6 +472,7 @@ def vib_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, pat
 
     op = torch.optim.Adam(model.parameters(), lr=.03)
     best_loss = torch.tensor([float('inf')]).squeeze()
+    best_mi =  torch.tensor([float('inf')]).squeeze()
     percent_correct = 0
     early_stop_counter = 0
 
@@ -471,6 +480,7 @@ def vib_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, pat
     train_percent_correct = 0
 
     epoch = 1
+    torch.save(model.state_dict(), "best_net_cache.ptr")
     while epoch <= max_epochs:
         temp_indices = list(deepcopy(indices))
         shuffle(temp_indices)
@@ -511,15 +521,18 @@ def vib_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, pat
 
             test_percent_correct = correct_guesses_seq(y_test, y_test_hat, mask_test)
 
-        if loss_test >= best_loss:
+        if (loss_test + lam * mi_test) >= (best_loss + lam * best_mi) or loss.isnan().any():
             early_stop_counter += 1
-            if early_stop_counter > patience:
-                model.load_state_dict(torch.load("best_net_cache.ptr"))
-                print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
-                      (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
-                return model, loss_test, mi_test, test_percent_correct, epoch
+            if early_stop_counter > patience or loss.isnan().any():
+                break
+                #model.load_state_dict(torch.load("best_net_cache.ptr"))
+                #print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
+                #      (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
+                #return model, best_loss, best_mi, test_percent_correct, best_epoch
         else:
             best_loss = loss_test
+            best_mi = mi_test
+            best_epoch = epoch
             early_stop_counter = 0
             percent_correct = test_percent_correct
             torch.save(model.state_dict(), "best_net_cache.ptr")
@@ -538,7 +551,8 @@ def vib_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, pat
     print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
           (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
 
-    return model, best_loss, mi_test, percent_correct, epoch
+    model.load_state_dict(torch.load("best_net_cache.ptr"))
+    yield model, best_loss, best_mi, test_percent_correct, best_epoch
 
 
 def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patience=float("inf"), l0_regularized=False, sub_batch_sz = 8):
@@ -611,18 +625,25 @@ def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patienc
             y_test_hat = model(x_test)
             test_mask = language_set.test_mask
             loss_test = ce_loss(y_test_hat[test_mask], y_test[test_mask])
+            loss_test_unr = loss_test.clone()
+            if l0_regularized:
+                re_loss = model.regularization()
+                loss_test = loss_test + re_loss
 
             test_percent_correct = correct_guesses_seq(y_test, y_test_hat, mask_test)
 
-        if loss_test >= best_loss:
+        if loss_test >= best_loss or loss.isnan().any():
             early_stop_counter += 1
-            if early_stop_counter > patience:
-                model.load_state_dict(torch.load("best_net_cache.ptr"))
-                print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
-                      (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
-                return model, loss_test, test_percent_correct, epoch
+            if early_stop_counter > patience or loss.isnan().any():
+                break
+                #model.load_state_dict(torch.load("best_net_cache.ptr"))
+                #print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
+                #      (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
+                #return model, best_test_loss, percent_correct, best_epoch
         else:
             best_loss = loss_test
+            best_epoch = epoch
+            best_test_loss = loss_test_unr
             early_stop_counter = 0
             percent_correct = test_percent_correct
             torch.save(model.state_dict(), "best_net_cache.ptr")
@@ -637,14 +658,14 @@ def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patienc
 
         if epoch % increment == 0:
             print("Saving epoch %d" % (epoch))
-            yield model, loss_test, test_percent_correct, epoch
+            yield model, loss_test_unr, test_percent_correct, epoch
 
         epoch += 1
 
     print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
           (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
-
-    return model, best_loss, percent_correct, epoch
+    model.load_state_dict(torch.load("best_net_cache.ptr"))
+    yield model, best_loss, percent_correct, best_epoch
     #return model, best_loss, percent_correct, epoch
 
 
@@ -716,9 +737,9 @@ def seq_transformers_train(model, language_set, batch_sz, mask_percent, incremen
 
             del x_test, y_test, mask_test
 
-        if loss_test >= best_loss:
+        if loss_test >= best_loss or loss.isnan().any():
             early_stop_counter += 1
-            if early_stop_counter > patience:
+            if early_stop_counter > patience or loss.isnan().any():
                 model.load_state_dict(torch.load("best_net_cache.ptr"))
                 print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
                       (best_loss.item(), percent_correct.item(), train_percent_correct.item()))

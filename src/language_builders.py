@@ -942,3 +942,92 @@ def make_g3_words_redundant(N, p):
         n = geometric(p)
         g3.append(make_g3_word(n))
     return g3
+
+
+class PFSA():
+    def __init__(self, transition: np.array, emission: np.array, start: int):
+        '''
+        **State indices and their matrix integers are one less than their output representation**
+        :param transition: deterministic matrix of integers Q_(t+1) = f(Q_t, X)
+        :param emission: probabilistic matrix of floats P(X|Q)
+        :param start: integer denoting starting state of network
+        '''
+        self.transition_matrix = transition
+        self.emission_matrix = emission
+        self.start = start
+        self.num_states = transition.shape[0]
+
+        assert self.num_states == self.emission_matrix.shape[0]
+        assert np.max(self.transition_matrix) == self.num_states - 1
+
+    def sample(self):
+        return self.__sample(self.start)
+
+    def __sample(self, state):
+        emitted = np.argmax(np.random.multinomial(1, self.emission_matrix[state]))
+        nll = -np.log(self.emission_matrix[state, emitted])
+        if emitted == 0:
+            return [int(emitted)+1], float(nll)
+        else:
+            continuation, c_nll = self.__sample(self.transition_matrix[state, emitted])
+            return [int(emitted)+1, *continuation], float(nll)+c_nll
+
+    def n_samples(self, n):
+        samples = []
+        nlls = []
+        for _ in range(n):
+            out = self.sample()
+            samples.append(out[0])
+            nlls.append(out[1])
+        return samples, nlls
+
+    def nll(self, word):
+        return self.__nll(word, self.start)
+
+    def __nll(self, word, state):
+        emitted, *remain = word
+        if remain:
+            c_nll = self.__nll(remain, self.transition_matrix[state, emitted-1])
+            return -np.log(self.emission_matrix[state, emitted-1]) + c_nll
+        else:
+            return -np.log(self.emission_matrix[state, emitted-1])
+
+
+# Heinz and Idsardi PFSAs + G13 intersection
+g13_transition = np.array([[-1,1,0,0],
+                           [-1,2,1,-1],
+                           [-1,1,0,-1]
+])
+g13_emission = np.array([[.05,.95/3,.95/3,.95/3],
+                         [.05,.95/2,.95/2,0],
+                         [.05,.95/2,.95/2,0]
+])
+g13_pfsa = PFSA(g13_transition, g13_emission, 0)
+
+###
+g1_transition = np.array([[-1,1,0,0],
+                          [-1,1,0,-1]
+])
+g1_emission = np.array([[.05,.95/3,.95/3,.95/3],
+                        [.05,.95/2,.95/2,0]
+])
+g1_pfsa = PFSA(g1_transition, g1_emission, 0)
+
+###
+g2_transition = np.array([[-1,1,0,0],
+                          [-1,1,1,-1]
+])
+g2_emission = np.array([[.05,.95/3,.95/3,.95/3],
+                        [.05,.95/2,.95/2,0]
+])
+g2_pfsa = PFSA(g2_transition, g2_emission, 0)
+
+###
+g3_transition = np.array([[-1,1,0,0],
+                          [-1,0,1,-1]
+])
+g3_emission = np.array([[.05,.95/3,.95/3,.95/3],
+                        [.05,.95/2,.95/2,0]
+])
+g3_pfsa = PFSA(g3_transition, g3_emission, 0)
+
