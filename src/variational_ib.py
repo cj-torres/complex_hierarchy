@@ -107,7 +107,7 @@ class RGRNN(torch.nn.Module):
 
 
 class RecursiveGaussianRNN(torch.nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_size, final_layer_sz, n_flows, n_layers):
+    def __init__(self, vocab_size, embedding_dim, hidden_size, final_layer_sz, n_flows=2, n_layers=2):
         super(RecursiveGaussianRNN, self).__init__()
 
         self.vocab_size = vocab_size
@@ -127,7 +127,7 @@ class RecursiveGaussianRNN(torch.nn.Module):
         )
         self.rnn = RGRNN(self.embedding_dim, self.hidden_size)
         self.decoder = torch.nn.Linear(self.hidden_size, self.vocab_size)
-        self.final_layer = torch.nn.Linear(self.noise_size, self.final_layer_sz)
+        self.final_layer = torch.nn.Linear(self.hidden_size, self.final_layer_sz)
         self.decoder = torch.nn.Linear(self.final_layer_sz, self.vocab_size)
 
     def encode(self, X):
@@ -158,6 +158,13 @@ class RecursiveGaussianRNN(torch.nn.Module):
         return ce_loss
 
     def mi_loss(self, h_seq, h_log_probs, mask):
+        '''
+
+        :param h_seq: torch.Tensor, a sequence of samples
+        :param h_log_probs: torch.Tensor, a sequence of log probabilities of the above samples
+        :param mask: torch.LongTensor, mask
+        :return: torch.Tensor, mutual information of h_sequence with its input, measured in bits
+        '''
         h_seq_flat = h_seq[mask]
         norm = torch.distributions.normal.Normal(torch.zeros_like(h_seq_flat[0]), torch.ones_like(h_seq_flat[0]))
 
@@ -167,7 +174,7 @@ class RecursiveGaussianRNN(torch.nn.Module):
         kld = h_log_probs[mask] - y_log_likelihood
         h_mi = kld.mean()
 
-        return h_mi
+        return h_mi/torch.log(torch.tensor([2.]))
 
     def forward(self, X):
         h_seq, h_probs, h_dists = self.encode(X)

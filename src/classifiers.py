@@ -65,7 +65,7 @@ def random_love_note():
 
 class LSTMBranchSequencer(torch.nn.Module):
 
-    def __init__(self, alphabet_sz, embed_dim, hidden_sz, final_layer_sz, output_sz):
+    def __init__(self, alphabet_sz, embed_dim, hidden_sz, final_layer_sz):
         super(LSTMBranchSequencer, self).__init__()
         self.hidden_size = hidden_sz
         self.embedding = torch.nn.Embedding(alphabet_sz, embed_dim, padding_idx=0)
@@ -76,7 +76,7 @@ class LSTMBranchSequencer(torch.nn.Module):
         )
         self.final_layer = torch.nn.Linear(hidden_sz, final_layer_sz)
         self.final_transform = torch.nn.Tanh()
-        self.out = torch.nn.Linear(final_layer_sz, output_sz)
+        self.out = torch.nn.Linear(final_layer_sz, alphabet_sz-1)
         self.out_f = torch.nn.Sigmoid()
         self.init_weights()
 
@@ -96,7 +96,7 @@ class LSTMBranchSequencer(torch.nn.Module):
 
 class RNNBranchSequencer(torch.nn.Module):
 
-    def __init__(self, alphabet_sz, embed_dim, hidden_sz, final_layer_sz, output_sz):
+    def __init__(self, alphabet_sz, embed_dim, hidden_sz, final_layer_sz):
         super(RNNBranchSequencer, self).__init__()
         self.hidden_size = hidden_sz
         self.embedding = torch.nn.Embedding(alphabet_sz, embed_dim, padding_idx=0)
@@ -107,7 +107,7 @@ class RNNBranchSequencer(torch.nn.Module):
         )
         self.final_layer = torch.nn.Linear(hidden_sz, final_layer_sz)
         self.final_transform = torch.nn.Tanh()
-        self.out = torch.nn.Linear(final_layer_sz, output_sz)
+        self.out = torch.nn.Linear(final_layer_sz, alphabet_sz-1)
         self.out_f = torch.nn.Sigmoid()
         self.init_weights()
 
@@ -301,7 +301,6 @@ def bernoulli_loss(y, y_hat):
 def bernoulli_loss_cont(y, y_hat, mask):
     return -(torch.xlogy(y[mask], y_hat[mask]) + torch.xlogy(1-y[mask], 1-y_hat[mask])).sum(dim=1).mean(dim=0)
 
-
 def correct_guesses_batch_seq(y, y_hat, mask):
     return (y_hat[mask].round() == y[mask]).sum() / torch.numel(y[mask])
 
@@ -347,6 +346,7 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
     from math import ceil
     from random import sample
 
+    loss_func = torch.nn.BCELoss()
     if l0_regularized:
         model = mdl.L0_Regularizer(model, lam)
 
@@ -365,33 +365,41 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
     op = torch.optim.Adam(model.parameters(), lr=.03)
     #lr_s = torch.optim.lr_scheduler.StepLR(op, )
     best_loss = torch.tensor([float('inf')]).squeeze()
-    percent_correct = 0
+    best_dev_loss = torch.tensor([float('inf')]).squeeze()
+    best_epoch = 0
+    percent_correct = torch.tensor([0.])
     early_stop_counter = 0
 
     indices = range(batches)
-    train_percent_correct = 0
+    train_percent_correct = torch.tensor([0.])
     epoch = 1
     size = torch.tensor([0])
     torch.save(model.state_dict(), "best_net_cache.ptr")
+    nan_break = False
     while epoch <= max_epochs:
         temp_indices = list(deepcopy(indices))
         shuffle(temp_indices)
         batches = batch_split(temp_indices, batch_sz)
         for batch in batches:
             for sub_batch in batch_split(batch, sub_batch_sz):
+                for param in model.parameters():
+                    param.grad = None
+                #with torch.autograd.detect_anomaly():
                 sub_batch_tens = torch.tensor(sub_batch).type(torch.LongTensor)
                 model.train()
                 x = x_train[sub_batch_tens].to("cuda")
                 y = y_train[sub_batch_tens].to("cuda")
                 mask = mask_train[sub_batch_tens].to("cuda")
                 y_hat = model(x)
-                loss = bernoulli_loss_cont(y, y_hat, mask)
+                loss = loss_func(y_hat[mask], y[mask].to(torch.float))
 
                 #breakpoint()
 
                 if l0_regularized:
                     re_loss = model.regularization()
                     loss = loss + re_loss
+                if torch.logical_not(loss.isfinite()).any():
+                    break
                 loss.backward()
                 train_percent_correct = correct_guesses_batch_seq(y, y_hat, mask)
 
@@ -402,25 +410,37 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
                 if l0_regularized:
                     model.constrain_parameters()
 
+                for param in model.parameters():
+                    if torch.isnan(param.grad).any():
+                        nan_break= True
+
+                if nan_break:
+                    break
+            if nan_break:
+                break
+        if nan_break:
+            break
+
         with torch.no_grad():
             model.eval()
 
-            x_test = language_set.test_input.to("cuda")
-            y_test = language_set.test_output.to("cuda")
-            mask_test = language_set.test_mask.to("cuda")
+            x_dev = language_set.dev_input.to("cuda")
+            y_dev = language_set.dev_output.to("cuda")
+            mask_dev = language_set.dev_mask.to("cuda")
 
-            y_test_hat = model(x_test)
-            loss_test = bernoulli_loss_cont(y_test, y_test_hat, mask_test)
-            loss_test_unr = loss_test.clone()
+            y_dev_hat = model(x_dev)
+            loss_dev = loss_func(y_dev_hat[mask_dev], y_dev[mask_dev].to(torch.float))
+            loss_dev_unr = loss_dev.clone()
             if l0_regularized:
                 re_loss = model.regularization()
-                loss_test = loss + re_loss
+                loss_dev = loss + re_loss
 
-            test_percent_correct = correct_guesses_batch_seq(y_test, y_test_hat, mask_test)
+            dev_percent_correct = correct_guesses_batch_seq(y_dev, y_dev_hat, mask_dev)
+            percent_correct = dev_percent_correct
 
-            del x_test, y_test, mask_test
+            del x_dev, y_dev, mask_dev
 
-        if loss_test >= best_loss or loss.isnan().any():
+        if loss_dev >= best_loss or loss.isnan().any():
             early_stop_counter += 1
             if early_stop_counter > patience or loss.isnan().any():
                 break
@@ -429,21 +449,20 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
                 #      (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
                 #return model, best_test_loss, test_percent_correct, best_epoch
         else:
-            best_loss = loss_test
-            best_test_loss = loss_test_unr
+            best_loss = loss_dev
+            best_dev_loss = loss_dev_unr
             best_epoch = epoch
             early_stop_counter = 0
-            percent_correct = test_percent_correct
             torch.save(model.state_dict(), "best_net_cache.ptr")
         if l0_regularized:
             size = model.count_l0()
         print(("Epoch: %d, Accuracy: %s, loss: %s, counter: %d, train accuracy: %s"+", network size: %s"*l0_regularized)
-              % ((epoch, test_percent_correct.item(), loss_test.item(), early_stop_counter, train_percent_correct.item())
+              % ((epoch, dev_percent_correct.item(), loss_dev.item(), early_stop_counter, train_percent_correct.item())
                  + (size.item(),)*l0_regularized))
 
         if epoch % increment == 0:
             print("Saving epoch %d" % (epoch))
-            yield model, loss_test_unr, test_percent_correct, epoch
+            yield model, loss_dev_unr, dev_percent_correct, epoch
 
 
         epoch+=1
@@ -451,7 +470,7 @@ def branch_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, 
     print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
           (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
     model.load_state_dict(torch.load("best_net_cache.ptr"))
-    yield model, best_test_loss, percent_correct, best_epoch
+    yield model, best_dev_loss, percent_correct, best_epoch
 
 
 def vib_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patience=float("inf")):
@@ -473,13 +492,16 @@ def vib_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, pat
     op = torch.optim.Adam(model.parameters(), lr=.03)
     best_loss = torch.tensor([float('inf')]).squeeze()
     best_mi =  torch.tensor([float('inf')]).squeeze()
-    percent_correct = 0
+    percent_correct = torch.tensor([0.])
     early_stop_counter = 0
 
     indices = range(batches)
-    train_percent_correct = 0
+    train_percent_correct = torch.tensor([0.])
+    best_dev_loss = torch.tensor([float('inf')]).squeeze()
+    best_epoch = 0
 
     epoch = 1
+    nan_break = False
     torch.save(model.state_dict(), "best_net_cache.ptr")
     while epoch <= max_epochs:
         temp_indices = list(deepcopy(indices))
@@ -499,6 +521,8 @@ def vib_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, pat
             mi_loss = model.mi_loss(h_seq, log_probs, mask)
 
             loss = ce_loss + lam * mi_loss
+            if torch.logical_not(loss.isfinite()).any():
+                break
 
             loss.backward()
             train_percent_correct = correct_guesses_seq(y, y_hat, mask)
@@ -507,44 +531,54 @@ def vib_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, pat
 
             op.step()
 
+            nan_break = False
+            for param in model.parameters():
+                if torch.isnan(param.grad).any():
+                    nan_break = True
+
+            if nan_break:
+                break
+        if nan_break:
+            break
+
         with torch.no_grad():
             model.eval()
 
-            x_test = language_set.test_input.to("cuda")
-            y_test = language_set.test_output.to("cuda")
-            mask_test = language_set.test_mask.to("cuda")
+            x_dev = language_set.dev_input.to("cuda")
+            y_dev = language_set.dev_output.to("cuda")
+            mask_dev = language_set.dev_mask.to("cuda")
 
-            y_test_hat, h_stats, h_seq, log_probs = model(x_test)
-            test_mask = language_set.test_mask
-            loss_test = model.lm_loss(y_test, y_test_hat, test_mask)
-            mi_test = model.mi_loss(h_seq, log_probs, test_mask)
+            y_dev_hat, h_stats, h_seq, log_probs = model(x_dev)
+            dev_mask = language_set.dev_mask
+            loss_dev = model.lm_loss(y_dev, y_dev_hat, dev_mask)
+            mi_dev = model.mi_loss(h_seq, log_probs, dev_mask)
 
-            test_percent_correct = correct_guesses_seq(y_test, y_test_hat, mask_test)
+            dev_percent_correct = correct_guesses_seq(y_dev, y_dev_hat, mask_dev)
 
-        if (loss_test + lam * mi_test) >= (best_loss + lam * best_mi) or loss.isnan().any():
+        if (loss_dev + lam * mi_dev) >= (best_loss + lam * best_mi) or loss.isnan().any():
             early_stop_counter += 1
             if early_stop_counter > patience or loss.isnan().any():
                 break
                 #model.load_state_dict(torch.load("best_net_cache.ptr"))
                 #print("Best loss was: %s, Accuracy: %s, Train Accuracy: %s" %
                 #      (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
-                #return model, best_loss, best_mi, test_percent_correct, best_epoch
+                #return model, best_loss, best_mi, dev_percent_correct, best_epoch
         else:
-            best_loss = loss_test
-            best_mi = mi_test
+            best_loss = loss_dev
+            best_mi = mi_dev
             best_epoch = epoch
             early_stop_counter = 0
-            percent_correct = test_percent_correct
+            percent_correct = dev_percent_correct
             torch.save(model.state_dict(), "best_net_cache.ptr")
         print(
                 "Epoch: %d, Accuracy: %s, CE Loss: %s, MI Loss: %s, counter: %d, train accuracy: %s" %
-                (epoch, test_percent_correct.item(), loss_test.item(), mi_test.item(), early_stop_counter,
+                (epoch, dev_percent_correct.item(), loss_dev.item(), mi_dev.item(), early_stop_counter,
                  train_percent_correct.item())
               )
 
         if epoch % increment == 0:
             print("Saving epoch %d" % epoch)
-            yield model, loss_test, mi_test, test_percent_correct, epoch
+            yield model, loss_dev, mi_dev, dev_percent_correct, epoch
 
         epoch += 1
 
@@ -552,7 +586,7 @@ def vib_seq_train(model, language_set, batch_sz, max_epochs, increment, lam, pat
           (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
 
     model.load_state_dict(torch.load("best_net_cache.ptr"))
-    yield model, best_loss, best_mi, test_percent_correct, best_epoch
+    yield model, best_loss, best_mi, dev_percent_correct, best_epoch
 
 
 def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patience=float("inf"), l0_regularized=False, sub_batch_sz = 8):
@@ -578,13 +612,16 @@ def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patienc
 
     op = torch.optim.Adam(model.parameters(), lr=.03)
     best_loss = torch.tensor([float('inf')]).squeeze()
-    percent_correct = 0
+    percent_correct = torch.tensor([0.])
     early_stop_counter = 0
+    best_dev_loss = torch.tensor([float('inf')]).squeeze()
+    best_epoch = 0
 
     indices = range(batches)
-    train_percent_correct = 0
+    train_percent_correct = torch.tensor([0.])
     #test_percent_correct = 0
     epoch = 1
+    nan_break = False
     while epoch <= max_epochs:
         temp_indices = list(deepcopy(indices))
         shuffle(temp_indices)
@@ -601,10 +638,13 @@ def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patienc
                 y_hat = model(x)
 
                 loss = ce_loss(y_hat[mask], y[mask])
+
                # print(loss.item())
                 if l0_regularized:
                     re_loss = model.regularization()
                     loss = loss + re_loss
+                if torch.logical_not(loss.isfinite()).any():
+                    break
                 loss.backward()
                 train_percent_correct = correct_guesses_seq(y, y_hat, mask)
 
@@ -615,24 +655,36 @@ def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patienc
                 if l0_regularized:
                     model.constrain_parameters()
 
+                nan_break = False
+                for param in model.parameters():
+                    if torch.isnan(param.grad).any():
+                        nan_break = True
+
+                if nan_break:
+                    break
+            if nan_break:
+                break
+        if nan_break:
+            break
+
         with torch.no_grad():
             model.eval()
 
-            x_test = language_set.test_input.to("cuda")
-            y_test = language_set.test_output.to("cuda")
-            mask_test = language_set.test_mask.to("cuda")
+            x_dev = language_set.dev_input.to("cuda")
+            y_dev = language_set.dev_output.to("cuda")
+            mask_dev = language_set.dev_mask.to("cuda")
 
-            y_test_hat = model(x_test)
-            test_mask = language_set.test_mask
-            loss_test = ce_loss(y_test_hat[test_mask], y_test[test_mask])
-            loss_test_unr = loss_test.clone()
+            y_dev_hat = model(x_dev)
+            dev_mask = language_set.dev_mask
+            loss_dev = ce_loss(y_dev_hat[dev_mask], y_dev[dev_mask])
+            loss_dev_unr = loss_dev.clone()
             if l0_regularized:
                 re_loss = model.regularization()
-                loss_test = loss_test + re_loss
+                loss_dev = loss_dev + re_loss
 
-            test_percent_correct = correct_guesses_seq(y_test, y_test_hat, mask_test)
+            dev_percent_correct = correct_guesses_seq(y_dev, y_dev_hat, mask_dev)
 
-        if loss_test >= best_loss or loss.isnan().any():
+        if loss_dev >= best_loss or loss.isnan().any():
             early_stop_counter += 1
             if early_stop_counter > patience or loss.isnan().any():
                 break
@@ -641,24 +693,24 @@ def seq_train(model, language_set, batch_sz, max_epochs, increment, lam, patienc
                 #      (best_loss.item(), percent_correct.item(), train_percent_correct.item()))
                 #return model, best_test_loss, percent_correct, best_epoch
         else:
-            best_loss = loss_test
+            best_loss = loss_dev
             best_epoch = epoch
-            best_test_loss = loss_test_unr
+            best_test_loss = loss_dev_unr
             early_stop_counter = 0
-            percent_correct = test_percent_correct
+            percent_correct = dev_percent_correct
             torch.save(model.state_dict(), "best_net_cache.ptr")
         size = torch.tensor([0])
         if l0_regularized:
             size = model.count_l0()
         print((
                           "Epoch: %d, Accuracy: %s, loss: %s, counter: %d, train accuracy: %s" + ", network size: %s" * l0_regularized)
-              % ((epoch, test_percent_correct.item(), loss_test.item(), early_stop_counter,
+              % ((epoch, dev_percent_correct.item(), loss_dev.item(), early_stop_counter,
                   train_percent_correct.item())
                  + (size.item(),) * l0_regularized))
 
         if epoch % increment == 0:
             print("Saving epoch %d" % (epoch))
-            yield model, loss_test_unr, test_percent_correct, epoch
+            yield model, loss_dev_unr, dev_percent_correct, epoch
 
         epoch += 1
 

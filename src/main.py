@@ -47,24 +47,25 @@ def pre_train(language_set, model_template, desired_accuracy, epochs, *args, **k
 def regularized_branch(num, models_dir, filename, generator_function, lambdas, epochs,  *model_args, **kwargs):
     # runs trials of branch sequencers (tries to predict correct possible continuations)
     # branch sequencers regularized, uses list of lambdas as input
+    loss_func = torch.nn.BCELoss()
     if not os.path.isdir(models_dir):
         os.mkdir(models_dir)
 
     with open(filename+"_loss.csv", 'w', newline='') as accuracy_file:
         writer_details = csv.writer(accuracy_file)
-        writer_details.writerow(["model_num", "lambda", "loss", "accuracy", "epoch", "l2", "l0", "re loss"])
+        writer_details.writerow(["model_num", "lambda", "loss", "accuracy", "epoch", "l2", "l0", "re loss", "test loss"])
         for lam in lambdas:
             for i in range(num):
                 language_set = generator_function(**kwargs)
                 print("Model %d" % (i + 1))
                 model = LSTMBranchSequencer(*model_args)
                 for model_out, loss, percent_correct, epoch in branch_seq_train(model, language_set, 256, epochs, 5,
-                                                                                l0_regularized=True, lam=lam):
+                                                                                l0_regularized=True, lam=lam, patience=50):
                     if loss.isnan().any():
                         break
                     #weights = model_to_list(model_out)
-                    if epoch % 25 == 0:
-                        if epoch > 1500 and (loss > .1 and percent_correct < 1):
+                    if epoch % 5 == 0:
+                        if epoch > 200 and (loss > .1 and percent_correct < 1):
                             torch.save(model_out, "{}/model_{}_{}.pt".format(
                                 models_dir, str(lam), str(i)))
 
@@ -72,7 +73,16 @@ def regularized_branch(num, models_dir, filename, generator_function, lambdas, e
                         l2 = model_out.count_l2().item()
                         l0 = model_out.count_l0().item()
                         re_loss = model_out.regularization().item()
-                    writer_details.writerow([i + 1, lam, loss.item(), percent_correct.item(), epoch, l2, l0, re_loss])
+
+                        model_out.eval()
+                        model_out.to("cuda")
+                        x_test = language_set.test_input.to("cuda")
+                        y_test = language_set.test_output.to("cuda")
+                        mask_test = language_set.test_mask.to("cuda")
+
+                        y_test_hat = model_out(x_test)
+                        loss_test = loss_func(y_test_hat[mask_test], y_test[mask_test].to(torch.float))
+                    writer_details.writerow([i + 1, lam, loss.item(), percent_correct.item(), epoch, l2, l0, re_loss, loss_test.item()])
 
 
 def run_seq(num, filename, generator_function, weight_decay=False, **kwargs):
@@ -96,32 +106,41 @@ def run_seq(num, filename, generator_function, weight_decay=False, **kwargs):
 def rnn_regularized_branch(num, models_dir, filename, generator_function, lambdas, epochs,  *model_args, **kwargs):
     # runs trials of branch sequencers (tries to predict correct possible continuations)
     # branch sequencers regularized, uses list of lambdas as input
+    loss_func = torch.nn.BCELoss()
     if not os.path.isdir(models_dir):
         os.mkdir(models_dir)
 
     with open(filename+"_loss.csv", 'w', newline='') as accuracy_file:
         writer_details = csv.writer(accuracy_file)
-        writer_details.writerow(["model_num", "lambda", "loss", "accuracy", "epoch", "l2", "l0", "re loss"])
+        writer_details.writerow(["model_num", "lambda", "loss", "accuracy", "epoch", "l2", "l0", "re loss", "test loss"])
         for lam in lambdas:
             for i in range(num):
                 language_set = generator_function(**kwargs)
                 print("Model %d" % (i + 1))
                 model = RNNBranchSequencer(*model_args)
                 for model_out, loss, percent_correct, epoch in branch_seq_train(model, language_set, 256, epochs, 5,
-                                                                                l0_regularized=True, lam=lam):
+                                                                                l0_regularized=True, lam=lam, patience=50):
                     if loss.isnan().any():
                         break
                     #weights = model_to_list(model_out)
-                    if epoch % 25 == 0:
-                        if epoch > 1500 and (loss > .1 and percent_correct < 1):
+                    if epoch % 5 == 0:
+                        if epoch > 50 and (loss > .1 and percent_correct < 1):
                             torch.save(model_out, "{}/model_{}_{}.pt".format(
                                 models_dir, str(lam), str(i)))
-
                     with torch.no_grad():
                         l2 = model_out.count_l2().item()
                         l0 = model_out.count_l0().item()
                         re_loss = model_out.regularization().item()
-                    writer_details.writerow([i + 1, lam, loss.item(), percent_correct.item(), epoch, l2, l0, re_loss])
+                        model_out.eval()
+                        model_out.to("cuda")
+                        x_test = language_set.test_input.to("cuda")
+                        y_test = language_set.test_output.to("cuda")
+                        mask_test = language_set.test_mask.to("cuda")
+
+                        y_test_hat = model_out(x_test)
+                        loss_test = loss_func(y_test_hat[mask_test], y_test[mask_test].to(torch.float))
+
+                    writer_details.writerow([i + 1, lam, loss.item(), percent_correct.item(), epoch, l2, l0, re_loss, loss_test.item()])
 
 
 def run_transf_seq(num, filename, generator_function, **kwargs):
@@ -145,25 +164,45 @@ def run_transf_seq(num, filename, generator_function, **kwargs):
 if __name__ == '__main__':
     from datetime import date
     import os
-    N = 15
-    lambdas = [.00001, .000015, .00002, .000025, .00003, .000035, .00004, .000045, .00005] #, .01, .02, .03, .04, .05]
-    lambdas = lambdas+[i + .000045 for i in lambdas]
+    N = 5
+
+    lambdas = torch.tensor(list(range(-6, -65, -4))) / 10
+    lambdas = list(reversed([10 ** x.item() for x in list(lambdas)]))
+    #lambdas = [.00001, .000015, .00002, .000025, .00003, .000035, .00004, .000045, .00005] #, .01, .02, .03, .04, .05]
+    #lambdas = lambdas+[i + .000045 for i in lambdas]
     new_dir = "Output-{}".format(str(date.today()))
     os.chdir("..\\data")
     if not os.path.isdir(new_dir):
         os.mkdir(new_dir)
     models_dir = new_dir + "/models"
+    models_dir_rnn = new_dir + "/models/rnn"
+    models_dir_lstm = new_dir + "/models/lstm"
     if not os.path.isdir(models_dir):
         os.mkdir(models_dir)
+    if not os.path.isdir(models_dir_rnn):
+        os.mkdir(models_dir_rnn)
+    if not os.path.isdir(models_dir_lstm):
+        os.mkdir(models_dir_lstm)
 
-    epochs = 1750
+    epochs = 200
 
-    rnn_regularized_branch(N, "{}/fl_small_lstm".format(models_dir), "{}/fl_small_lstm".format(new_dir), lb.make_fl_branch_sets, lambdas,
+    regularized_branch(N, "{}/fl_small_lstm".format(models_dir_lstm), "{}/fl_small_lstm".format(new_dir),
+                       lb.make_fl_branch_sets, lambdas,
                        epochs,
-                       *(5, 3, 8, 8, 4), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
-    rnn_regularized_branch(N, "{}/sh_small_lstm".format(models_dir), "{}/sh_small_lstm".format(new_dir), lb.make_sh_branch_sets, lambdas,
+                       *(5, 3, 5, 5), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+    regularized_branch(N, "{}/sh_small_lstm".format(models_dir_lstm), "{}/sh_small_lstm".format(new_dir),
+                       lb.make_sh_branch_sets, lambdas,
                        epochs,
-                       *(5, 3, 8, 8, 4), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+                       *(5, 3, 5, 5), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+
+    #rnn_regularized_branch(N, "{}/fl_small_rnn".format(models_dir_rnn), "{}/fl_small_rnn".format(new_dir), lb.make_fl_branch_sets, lambdas,
+    #                   epochs,
+    #                   *(5, 3, 6, 6), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+    #rnn_regularized_branch(N, "{}/sh_small_rnn".format(models_dir_rnn), "{}/sh_small_rnn".format(new_dir), lb.make_sh_branch_sets, lambdas,
+    #                   epochs,
+    #                   *(5, 3, 6, 6), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+
+
 
     #regularized_branch(N, "{}/dyck1_small_lstm".format(new_dir), lb.make_dyck1_sets_uniform_continuation, lambdas, epochs,
     #                   *(4, 2, 4, 4, 4), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})

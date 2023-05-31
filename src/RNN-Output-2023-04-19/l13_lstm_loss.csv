@@ -1,0 +1,10 @@
+model num,lambda,loss,accuracy,epoch,l2,l0,re loss,l1 loss,l3 loss
+1,1e-05,nan,0.0,325,nan,nan,nan,nan,nan
+1,2e-05,1.0529422760009766,0.41950446367263794,600,5018.84814453125,49.44152069091797,0.0009888303466141224,1.134128451347351,1.391331672668457
+1,3e-05,nan,0.0,250,nan,nan,nan,nan,nan
+1,4e-05,nan,0.0,325,nan,nan,nan,nan,nan
+1,5e-05,nan,0.0,395,nan,nan,nan,nan,nan
+1,6e-05,nan,0.0,270,nan,nan,nan,nan,nan
+1,7e-05,nan,0.0,145,nan,nan,nan,nan,nan
+1,8e-05,nan,0.0,400,nan,nan,nan,nan,nan
+1,9e-05,nan,0.0,90,nan,nan,nan,nan,nan
