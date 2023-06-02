@@ -5,7 +5,7 @@ library(tidyverse)
 fl_lstm_data = read.csv("F:\\PycharmProjects\\complex_hierarchy\\data\\Output-2023-05-19\\fl_small_lstm_loss.csv") %>% mutate(lang = "fl")
 sh_lstm_data = read.csv("F:\\PycharmProjects\\complex_hierarchy\\data\\Output-2023-05-19\\sh_small_lstm_loss.csv") %>% mutate(lang = "sh")
 
-lstm_data = rbind(fl_lstm_data, sh_lstm_data)
+lstm_data = rbind(fl_lstm_data, sh_lstm_data)%>%mutate(across(lang,factor,levels=c("sh","fl")))
 
 
 pareto <- function(data, x, y, convex=TRUE){
@@ -38,46 +38,19 @@ add_pareto <- function(data, group, x, y, max_x, max_y){
   for(g in groups){
     data_subset = data %>% filter(data[,group] == g)
     data_subset$is.pareto <- pareto(data_subset, x, y)
-    start_point = data_subset[1,]
+    #start_point = data_subset[1,]
     end_point = data_subset[nrow(data_subset),]
-    start_point[,group] = g
-    start_point[,x] = -10
-    start_point[,y] = max_y
-    start_point$is.pareto = TRUE
+    #start_point[,group] = g
+    #start_point[,x] = -10
+    #start_point[,y] = max_y
+    #start_point$is.pareto = TRUE
     end_point[,group] = g
     end_point[,x] = max_x
     end_point[,y] = 0
     end_point$is.pareto=TRUE
-    edited_data[[g]] = bind_rows(start_point, data_subset, end_point)
+    edited_data[[g]] = bind_rows(data_subset, end_point)
   }
   return(bind_rows(edited_data))
-}
-
-
-rect_under_pareto <- function(data, group, factor, x, y, max_x, max_y){
-  data_subset = data %>% filter(data[,group] == factor)
-  data_subset$is.pareto <- pareto(data_subset, x, y)
-  pareto_points = filter(data_subset, is.pareto)
-  pareto_points = pareto_points[order(pareto_points[,x]),]
-  start = c(0, max_y)
-  area = 0
-  
-  old_p = start
-  
-  for(row in  1:nrow(pareto_points)){
-    p = c(pareto_points[row, x], pareto_points[row, y])
-    dx = (p-old_p)[[1]]
-    trap_a = (dx * old_p[[2]])
-    area = area + trap_a
-    old_p = p
-    
-  }
-  
-  p = c(max_x, 0)
-  dx = (p-old_p)[[1]]
-  trap_a = (dx * old_p[[2]])
-  area = area + trap_a
-  return(area)
 }
 
 trap_under_pareto <- function(data, group, factor, x, y, max_x, max_y, min_x, min_y){
@@ -85,12 +58,12 @@ trap_under_pareto <- function(data, group, factor, x, y, max_x, max_y, min_x, mi
   data_subset$is.pareto <- pareto(data_subset, x, y)
   pareto_points = filter(data_subset, is.pareto)
   pareto_points = pareto_points[order(pareto_points[,x]),]
-  start = c(min_x, max_y)
+  start = c(pareto_points[1, x], pareto_points[1, y])
   area = 0
   
   old_p = start
   
-  for(row in  1:nrow(pareto_points)){
+  for(row in  2:nrow(pareto_points)){
     p = c(pareto_points[row, x], pareto_points[row, y])
     if(p[[2]] < min_y){
       p[[2]] = min_y
@@ -142,7 +115,7 @@ for (i in 1:1000){
 
 print(sum(area_diff_bigger,na.rm=TRUE) / 1000)
 
-plot_lstm = add_pareto(lstm_data, "lang", "l0", "loss", max_x, max_y) %>% mutate(loss = ifelse(loss < 0, 0, loss))
+plot_lstm = add_pareto(lstm_data, "lang", "l0", "loss", max_x, max_y) %>% mutate(loss = ifelse(loss < 0, 0, loss))%>%mutate(across(lang,factor,levels=c("sh","fl")))
 
 ggplot(plot_lstm, aes(x=l0, y=loss)) + geom_point() + facet_wrap(~lang)
 
@@ -151,6 +124,8 @@ ggplot(lstm_data, aes(x=l0, y=loss, color=lang, group=lang)) +geom_point() + fac
   geom_step(data=plot_lstm%>% filter(is.pareto)) + coord_cartesian(ylim=c(0,.7), xlim=c(0,150)) + theme_bw()
 
 
-ggplot(lstm_data, aes(x=l0, y=loss, color=lang, group=lang)) +geom_point() + facet_wrap(~lang)+
-  geom_ribbon(data = plot_lstm %>% filter(is.pareto) %>% arrange(lang, l0), aes(fill=lang, ymax = loss, ymin=0), alpha=.25)+
-  coord_cartesian(ylim=c(0,max_y), xlim=c(min_x,75)) + theme_bw()
+ggplot(lstm_data, aes(x=l0, y=loss, color=lang, group=lang)) +geom_point(color="gray") + facet_grid(.~lang, labeller = as_labeller(c("sh" = "Standard Harmony", "fl"="First-Last")))+
+  geom_ribbon(data = plot_lstm %>% filter(is.pareto) %>% arrange(lang, l0), aes(fill=lang, ymax = loss, ymin=0), alpha=.25)+geom_point(data=lstm_data %>% filter(abs(loss)<10e-3))+
+  coord_cartesian(ylim=c(0,max_y), xlim=c(min_x,75)) + theme_bw() + xlab("Number of parameters (expected value)") + ylab("Average Bernoulli loss (per character)") + 
+  scale_color_manual(labels=c("First-Last", "Standard Harmony"), values = c("#56B4E9","#D55E00")) + scale_fill_manual(labels=c("First-Last", "Standard Harmony"), values =  c("#56B4E9","#D55E00"))+labs(color="Language", fill="Language") +
+  theme(text = element_text(size=17))+theme(legend.position="none")

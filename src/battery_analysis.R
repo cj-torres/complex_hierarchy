@@ -70,17 +70,12 @@ add_pareto <- function(data, group, x, y, max_x, max_y){
   for(g in groups){
     data_subset = data %>% filter(data[,group] == g)
     data_subset$is.pareto <- pareto(data_subset, x, y)
-    start_point = data_subset[1,]
     end_point = data_subset[nrow(data_subset),]
-    start_point[,group] = g
-    start_point[,x] = -10
-    start_point[,y] = max_y
-    start_point$is.pareto = TRUE
     end_point[,group] = g
     end_point[,x] = max_x
     end_point[,y] = 0
     end_point$is.pareto=TRUE
-    edited_data[[g]] = bind_rows(start_point, data_subset, end_point)
+    edited_data[[g]] = bind_rows(data_subset, end_point)
   }
   return(bind_rows(edited_data))
 }
@@ -118,12 +113,12 @@ trap_under_pareto <- function(data, group, factor, x, y, max_x, max_y, min_x, mi
   data_subset$is.pareto <- pareto(data_subset, x, y)
   pareto_points = filter(data_subset, is.pareto)
   pareto_points = pareto_points[order(pareto_points[,x]),]
-  start = c(min_x, max_y)
+  start = c(pareto_points[1, x], pareto_points[1, y])
   area = 0
   
   old_p = start
   
-  for(row in  1:nrow(pareto_points)){
+  for(row in  2:nrow(pareto_points)){
     p = c(pareto_points[row, x], pareto_points[row, y])
     if(p[[2]] < min_y){
       p[[2]] = min_y
@@ -178,7 +173,7 @@ for(lstm_group in lstm_groups){
     
     sample_sp_area <- trap_under_pareto(sample, "lang.type", "2", "l0", "kld", max_x, max_y, min_x, min_y)
     
-    sp_sl_diff_bigger[i] = sample_sp_area-sample_sl_area > sp_sl_diff
+    sp_sl_diff_bigger[i] = abs(sample_sp_area-sample_sl_area) > abs(sp_sl_diff)
     
   }
   print(sum(sp_sl_diff_bigger,na.rm=TRUE) / 1000)
@@ -193,7 +188,7 @@ for(lstm_group in lstm_groups){
     
     sample_reg_area <- trap_under_pareto(sample, "lang.type", "3", "l0", "kld", max_x, max_y, min_x, min_y)
     
-    reg_sl_diff_bigger[i] = sample_reg_area-sample_sl_area > reg_sl_diff
+    reg_sl_diff_bigger[i] = abs(sample_reg_area-sample_sl_area) > abs(reg_sl_diff)
     
   }
   print(sum(reg_sl_diff_bigger,na.rm=TRUE) / 1000)
@@ -208,14 +203,55 @@ for(lstm_group in lstm_groups){
     
     sample_sp_area <- trap_under_pareto(sample, "lang.type", "2", "l0", "kld", max_x, max_y, min_x, min_y)
     
-    reg_sp_diff_bigger[i] = sample_reg_area-sample_sp_area > reg_sp_diff
+    reg_sp_diff_bigger[i] = abs(sample_reg_area-sample_sp_area) > abs(reg_sp_diff)
     
   }
   print(sum(reg_sp_diff_bigger,na.rm=TRUE) / 1000)
 }
 
-plot_lstm = add_pareto(lstm_data, "lang", "l0", "kld", max_x, max_y) %>% mutate(kld = ifelse(kld < 0, 0, kld))
 
-ggplot(lstm_data, aes(x=l0, y=kld, color=lang, group=lang)) +geom_point() + facet_grid(fsa.group~lang.type)+
-  geom_ribbon(data = plot_lstm %>% filter(is.pareto) %>% arrange(lang, l0), aes(fill=lang, ymax = kld, ymin=0), alpha=.25)+
-  coord_cartesian(ylim=c(0,.5), xlim=c(min_x,75)) + theme_bw()
+
+for(lstm_group in lstm_groups){
+  lstm_group = as.data.frame(lstm_group)
+  max_x = max(lstm_group[,"l0"])
+  min_x = min(lstm_group[,"l0"])
+  plot_lstm = add_pareto(lstm_group, "lang", "l0", "kld", max_x, max_y) %>% mutate(kld = ifelse(kld < 0, 0, kld))
+  
+  plot = ggplot(lstm_group, aes(x=l0, y=kld, color=lang, group=lang)) +geom_point() + facet_wrap(~lang.type, labeller = as_labeller(c("1"="Strictly Local", "2" = "Strictly Piecewise", "3" = "Strictly Regular")))+
+    geom_ribbon(data = plot_lstm %>% filter(is.pareto) %>% arrange(lang, l0), aes(fill=lang, ymax = kld, ymin=0), alpha=.25)+
+    coord_cartesian(ylim=c(0,.5), xlim=c(min_x,75)) + theme_bw() + scale_color_manual(labels=c("Strictly Local", "Strictly Piecewise", "Strictly Regular"), values=c("#E69F00", "#56B4E9","#D55E00")) + scale_fill_manual(labels=c("Strictly Local", "Strictly Piecewise", "Strictly Regular"), values=c("#E69F00", "#56B4E9","#D55E00"))+
+    xlab("Number of parameters (expected value)")+ylab("Kullback-Liebler Divergence") +labs(color="Language", fill="Language") + theme(text = element_text(size=17))
+  print(plot)
+}
+
+plot_data = list()
+for(lstm_group in lstm_groups){
+  lstm_group = as.data.frame(lstm_group)
+  max_x = max(lstm_group[,"l0"])
+  min_x = min(lstm_group[,"l0"])
+  plot_lstm = add_pareto(lstm_group, "lang", "l0", "kld", max_x, max_y) %>% mutate(kld = ifelse(kld < 0, 0, kld))
+  plot_data = c(plot_data, list(plot_lstm))
+}
+plot_lstm = do.call(rbind, plot_data)
+
+plot = ggplot(lstm_data, aes(x=l0, y=kld, color=lang.type, group=lang)) +geom_point() + facet_grid(fsa.group~lang.type, labeller = as_labeller(c("1"="Strictly Local", "2" = "Strictly Piecewise", "3" = "Strictly Regular", 'g'="G","a"="A","b"="B")))+
+  geom_ribbon(data = plot_lstm %>% filter(is.pareto) %>% arrange(lang, l0), aes(fill=lang.type, ymax = kld, ymin=0), alpha=.25)+
+  coord_cartesian(ylim=c(0,.5), xlim=c(min_x,75)) + theme_bw() + scale_color_manual(labels=c("Strictly Local", "Strictly Piecewise", "Strictly Regular"), values=c("#E69F00", "#56B4E9","#D55E00")) + scale_fill_manual(labels=c("Strictly Local", "Strictly Piecewise", "Strictly Regular"), values=c("#E69F00", "#56B4E9","#D55E00"))+
+  xlab("Number of parameters (expected value)")+ylab("Kullback-Liebler Divergence") +labs(color="Language", fill="Language") + theme(text = element_text(size=17),legend.position="none")
+print(plot)
+
+eps_data = lstm_data %>% filter(abs(kld)<10e-3)%>%mutate(fsa.group=as.factor(fsa.group))%>%mutate(lang.type=as.factor(lang.type))
+result = aov(data=eps_data,l0~lang.type*fsa.group)
+posthoc <- TukeyHSD(result)
+print(posthoc)
+
+
+ggplot(eps_data, aes(y=l0, x=lang.type, color=lang.type))+facet_wrap(~fsa.group, labeller = as_labeller(c("a"="A", "b" = "B", "g" = "G")))+geom_boxplot(lwd=1.2)+scale_x_discrete(labels = c("SL", "SP", "Reg"))+
+  xlab("Regular Language Type") + ylab("Number of parameters (expected value)")+theme_bw()+theme(legend.position = "none", text = element_text(size=17))+scale_color_manual(values=c("#E69F00", "#56B4E9","#D55E00"))
+
+plot = ggplot(lstm_data, aes(x=l0, y=kld, color=lang.type, group=lang)) +geom_point(color="gray") + facet_grid(fsa.group~lang.type, labeller = as_labeller(c("1"="Strictly Local", "2" = "Strictly Piecewise", "3" = "Strictly Regular", 'g'="G","a"="A","b"="B")))+
+  geom_ribbon(data = plot_lstm %>% filter(is.pareto) %>% arrange(lang, l0), aes(fill=lang.type, ymax = kld, ymin=0), alpha=.25)+geom_point(data=lstm_data %>% filter(abs(kld)<10e-3))+
+  coord_cartesian(ylim=c(0,.5), xlim=c(min_x,75)) + theme_bw() + scale_color_manual(labels=c("Strictly Local", "Strictly Piecewise", "Strictly Regular"), values=c("#E69F00", "#56B4E9","#D55E00")) + scale_fill_manual(labels=c("Strictly Local", "Strictly Piecewise", "Strictly Regular"), values=c("#E69F00", "#56B4E9","#D55E00"))+
+  xlab("Number of parameters (expected value)")+ylab("Kullback-Liebler Divergence") +labs(color="Language", fill="Language") + theme(text = element_text(size=17),legend.position="none")
+print(plot)
+
