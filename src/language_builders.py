@@ -1001,7 +1001,7 @@ a1_pfsa = PFSA(a1_transition, a1_emission, 0)
 ###
 # a2 is a SP language
 a2_transition = np.array([[-1,1,0,0],
-                           [-1,2,1,0],
+                           [-1,2,1,1],
                            [-1,2,2,-1]
 ])
 a2_emission = np.array([[.05,.95/3,.95/3,.95/3],
@@ -1013,7 +1013,7 @@ a2_pfsa = PFSA(a2_transition, a2_emission, 0)
 ###
 # a3 is a counting language
 a3_transition = np.array([[-1,1,0,0],
-                           [-1,2,1,0],
+                           [-1,2,1,1],
                            [-1,0,2,-1]
 ])
 a3_emission = np.array([[.05,.95/3,.95/3,.95/3],
