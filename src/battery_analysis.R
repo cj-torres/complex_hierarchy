@@ -1,8 +1,8 @@
 rm(list = ls())
 library(tidyverse)
 
-
-directory = "F:\\PycharmProjects\\complex_hierarchy\\data\\Output-2023-05-20"
+setwd("C:\\Users\\torre\\PycharmProjects\\complex_hierarchy\\src")
+directory = "..\\data\\Output-2023-05-20"
 
 
 read_loss_files <- function(directory, model_type) {
@@ -142,7 +142,7 @@ language_folders = list.files(directory, full.names=TRUE)
 languages = list.files(directory, full.names=FALSE)
 
 lstm_data = read_loss_files(directory, "lstm") %>% mutate(fsa.group = substr(lang,1,1)) %>% mutate(lang.type = substr(lang,2,2)) %>% mutate(kld = test.loss - best)
-
+lstm_data = lstm_data %>% group_by(lam, num, lang) %>% slice(n())
 lstm_groups = lstm_data %>% group_by(fsa.group) %>% group_split()
 
 for(lstm_group in lstm_groups){
@@ -255,3 +255,5 @@ plot = ggplot(lstm_data, aes(x=l0, y=kld, color=lang.type, group=lang)) +geom_po
   xlab("Number of parameters (expected value)")+ylab("Kullback-Liebler Divergence") +labs(color="Language", fill="Language") + theme(text = element_text(size=17),legend.position="none")
 print(plot)
 
+
+lstm_data = lstm_data %>% group_by(lam, num, lang) %>% slice(n())

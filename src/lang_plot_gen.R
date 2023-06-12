@@ -1,12 +1,12 @@
 rm(list = ls())
 library(tidyverse)
 
-
-fl_lstm_data = read.csv("F:\\PycharmProjects\\complex_hierarchy\\data\\Output-2023-05-19\\fl_small_lstm_loss.csv") %>% mutate(lang = "fl")
-sh_lstm_data = read.csv("F:\\PycharmProjects\\complex_hierarchy\\data\\Output-2023-05-19\\sh_small_lstm_loss.csv") %>% mutate(lang = "sh")
+setwd("C:\\Users\\torre\\PycharmProjects\\complex_hierarchy\\src")
+fl_lstm_data = read.csv("..\\data\\Output-2023-05-19\\fl_small_lstm_loss.csv") %>% mutate(lang = "fl")
+sh_lstm_data = read.csv("..\\data\\Output-2023-05-19\\sh_small_lstm_loss.csv") %>% mutate(lang = "sh")
 
 lstm_data = rbind(fl_lstm_data, sh_lstm_data)%>%mutate(across(lang,factor,levels=c("sh","fl")))
-
+lstm_data = lstm_data %>% group_by(lambda, model_num, lang) %>% slice(n()) %>% ungroup() %>% as.data.frame()
 
 pareto <- function(data, x, y, convex=TRUE){
   
