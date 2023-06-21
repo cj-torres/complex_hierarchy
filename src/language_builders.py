@@ -1078,8 +1078,8 @@ def make_intersection_complement_sets(pfsa_1, pfsa_2, intersection_pfsa, final_n
         lang_2 = pfsa_2.n_samples(n)
         intersection = intersection_pfsa.n_samples(n)
 
-        lang1_complement = [word for word in lang_1 if lang_1 not in intersection]
-        lang2_complement = [word for word in lang_2 if lang_2 not in intersection]
+        lang1_complement = [word for word in lang_1 if word not in intersection]
+        lang2_complement = [word for word in lang_2 if word not in intersection]
 
         if len(lang2_complement) > final_n and len(lang1_complement) > final_n:
             satisfied = True
@@ -1087,8 +1087,8 @@ def make_intersection_complement_sets(pfsa_1, pfsa_2, intersection_pfsa, final_n
     train_in, dev_in, test_in = shuffler(intersection, split_p, reject_threshold)
     intersection_data = PFSALanguageData(*to_tensors_pfsa(train_in)+to_tensors_pfsa(dev_in)+
                                           to_tensors_pfsa(test_in), intersection_pfsa)
-    lang_1_test = PFSALanguageData(*(3*to_tensors_pfsa(lang1_complement)), pfsa_1)
-    lang_2_test = PFSALanguageData(*(3*to_tensors_pfsa(lang2_complement)), pfsa_2)
+    lang_1_test = PFSALanguageData(*(3*to_tensors_pfsa(lang1_complement[:final_n])), pfsa_1)
+    lang_2_test = PFSALanguageData(*(3*to_tensors_pfsa(lang2_complement[:final_n])), pfsa_2)
 
     return intersection_data, lang_1_test, lang_2_test
 

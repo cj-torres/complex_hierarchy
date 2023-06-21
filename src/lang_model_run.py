@@ -17,9 +17,9 @@ def intersection_run(num, lambdas, epochs, language_union_gen, lang_1_gen, lang_
     if not os.path.isdir(models_dir + "/lstm"):
         os.mkdir(models_dir + "/lstm")
         os.mkdir(models_dir + "/lstm/models")
-    if not os.path.isdir(models_dir+"/rnn"):
-        os.mkdir(models_dir+"/rnn")
-        os.mkdir(models_dir + "/rnn/models")
+    #if not os.path.isdir(models_dir+"/rnn"):
+    #    os.mkdir(models_dir+"/rnn")
+    #    os.mkdir(models_dir + "/rnn/models")
     #if not os.path.isdir(models_dir + "/vib"):
     #    os.mkdir(models_dir + "/vib")
     #    os.mkdir(models_dir + "/vib/models")
@@ -27,32 +27,32 @@ def intersection_run(num, lambdas, epochs, language_union_gen, lang_1_gen, lang_
     best_lstm_l1 = lstm_best_fit(num*2, lang_1_gen, epochs, *model_args, **lang_args)
     best_lstm_l2 = lstm_best_fit(num*2, lang_2_gen, epochs, *model_args, **lang_args)
     best_lstm_union = lstm_best_fit(num*2, language_union_gen, epochs, *model_args, **lang_args)
-    best_rnn_l1 = rnn_best_fit(num*2, lang_1_gen, epochs, *model_args, **lang_args)
-    best_rnn_l2 = rnn_best_fit(num*2, lang_2_gen, epochs, *model_args, **lang_args)
-    best_rnn_union = rnn_best_fit(num*2, language_union_gen, epochs, *model_args, **lang_args)
+    #best_rnn_l1 = rnn_best_fit(num*2, lang_1_gen, epochs, *model_args, **lang_args)
+    #best_rnn_l2 = rnn_best_fit(num*2, lang_2_gen, epochs, *model_args, **lang_args)
+    #best_rnn_union = rnn_best_fit(num*2, language_union_gen, epochs, *model_args, **lang_args)
 
 
     best_lstm_l1.to("cpu")
     best_lstm_l2.to("cpu")
-    best_rnn_l1.to("cpu")
-    best_rnn_l2.to("cpu")
+    #best_rnn_l1.to("cpu")
+    #best_rnn_l2.to("cpu")
     best_lstm_union.to("cpu")
-    best_rnn_union.to("cpu")
+    #best_rnn_union.to("cpu")
 
     torch.save(best_lstm_l1, models_dir + "/models/best_lstm_l1.pt")
     torch.save(best_lstm_l2, models_dir + "/models/best_lstm_l2.pt")
-    torch.save(best_rnn_l1, models_dir + "/models/best_rnn_l1.pt")
-    torch.save(best_rnn_l2, models_dir + "/models/best_rnn_l1.pt")
+    #torch.save(best_rnn_l1, models_dir + "/models/best_rnn_l1.pt")
+    #torch.save(best_rnn_l2, models_dir + "/models/best_rnn_l1.pt")
     torch.save(best_lstm_union, models_dir + "/models/best_lstm_l13.pt")
-    torch.save(best_rnn_union, models_dir + "/models/best_rnn_l13.pt")
+    #torch.save(best_rnn_union, models_dir + "/models/best_rnn_l13.pt")
 
     #vib_file = open(models_dir + "/vib/vib_loss.csv", 'w', newline='')
     lstm_file = open(models_dir + "/lstm/lstm_loss.csv", 'w', newline='')
-    rnn_file = open(models_dir + "/rnn/rnn_loss.csv", 'w', newline='')
+    #rnn_file = open(models_dir + "/rnn/rnn_loss.csv", 'w', newline='')
 
     #vib_writer = csv.writer(vib_file)
     lstm_writer = csv.writer(lstm_file)
-    rnn_writer = csv.writer(rnn_file)
+    #rnn_writer = csv.writer(rnn_file)
 
     #vib_writer.writerow(["num", "lam", "loss", "mi", "percent correct", "epoch", "loss lang 1", "mi lang 1",
     #                     "loss lang 2", "mi lang 2", "emp best lang 1", "emp best lang 2", "best lang 1", "best lang 2",
@@ -60,9 +60,9 @@ def intersection_run(num, lambdas, epochs, language_union_gen, lang_1_gen, lang_
     lstm_writer.writerow(["num", "lam", "loss", "percent correct", "epoch", "l2", "l0", "re loss", "loss lang 1",
                           "loss lang 2", "emp best lang 1", "emp best lang 2", "best lang 1", "best lang 2",
                          "empirical crossent 1", "empirical crossent 2"])
-    rnn_writer.writerow(["num", "lam", "loss", "percent correct", "epoch", "l2", "l0", "re loss", "loss lang 1",
-                          "loss lang 2", "emp best lang 1", "emp best lang 2", "best lang 1", "best lang 2",
-                         "empirical crossent 1", "empirical crossent 2"])
+    #rnn_writer.writerow(["num", "lam", "loss", "percent correct", "epoch", "l2", "l0", "re loss", "loss lang 1",
+    #                      "loss lang 2", "emp best lang 1", "emp best lang 2", "best lang 1", "best lang 2",
+    #                     "empirical crossent 1", "empirical crossent 2"])
 
     for j, lam in enumerate(lambdas):
         for i in range(num):
@@ -75,10 +75,10 @@ def intersection_run(num, lambdas, epochs, language_union_gen, lang_1_gen, lang_
                                                lang_1.test_output[lang_1.test_mask]).item()
             lstm_l2_empirical_best = ce_loss(best_lstm_l2(lang_2.test_input)[lang_2.test_mask],
                                                lang_2.test_output[lang_2.test_mask]).item()
-            rnn_l1_empirical_best = ce_loss(best_rnn_l1(lang_1.test_input)[lang_1.test_mask],
-                                              lang_1.test_output[lang_1.test_mask]).item()
-            rnn_l2_empirical_best = ce_loss(best_rnn_l2(lang_2.test_input)[lang_2.test_mask],
-                                              lang_2.test_output[lang_2.test_mask]).item()
+            #rnn_l1_empirical_best = ce_loss(best_rnn_l1(lang_1.test_input)[lang_1.test_mask],
+            #                                  lang_1.test_output[lang_1.test_mask]).item()
+            #rnn_l2_empirical_best = ce_loss(best_rnn_l2(lang_2.test_input)[lang_2.test_mask],
+            #                                  lang_2.test_output[lang_2.test_mask]).item()
             l1_theoretical_best = (lang_1.test_nll.sum() / lang_1.test_mask.sum()).item()
             l2_theoretical_best = (lang_2.test_nll.sum() / lang_2.test_mask.sum()).item()
 
@@ -86,10 +86,10 @@ def intersection_run(num, lambdas, epochs, language_union_gen, lang_1_gen, lang_
                                              lang_1.test_output[lang_1.test_mask]).item()
             lstm_l2_empirical_crossent = ce_loss(best_lstm_union(lang_2.test_input)[lang_2.test_mask],
                                              lang_2.test_output[lang_2.test_mask]).item()
-            rnn_l1_empirical_crossent = ce_loss(best_rnn_union(lang_1.test_input)[lang_1.test_mask],
-                                            lang_1.test_output[lang_1.test_mask]).item()
-            rnn_l2_empirical_crossent = ce_loss(best_rnn_union(lang_2.test_input)[lang_2.test_mask],
-                                            lang_2.test_output[lang_2.test_mask]).item()
+            #rnn_l1_empirical_crossent = ce_loss(best_rnn_union(lang_1.test_input)[lang_1.test_mask],
+            #                                lang_1.test_output[lang_1.test_mask]).item()
+            #rnn_l2_empirical_crossent = ce_loss(best_rnn_union(lang_2.test_input)[lang_2.test_mask],
+            #                                lang_2.test_output[lang_2.test_mask]).item()
 
             lstm_model, loss, percent_correct, epoch, l2, l0, re_loss, loss_lang_1, loss_lang_2 = lstm_intersection_run(
                 lam, epochs, language_set, lang_1, lang_2, *model_args
@@ -102,15 +102,15 @@ def intersection_run(num, lambdas, epochs, language_union_gen, lang_1_gen, lang_
             torch.save(lstm_model, models_dir + "/lstm/models/lstm_{}_{}.pt".format(str(lam), str(i+1)))
             ####
 
-            rnn_model, loss, percent_correct, epoch, l2, l0, re_loss, loss_lang_1, loss_lang_2 = rnn_intersection_run(
-                lam, epochs, language_set, lang_1, lang_2, *model_args
-            )
+            #rnn_model, loss, percent_correct, epoch, l2, l0, re_loss, loss_lang_1, loss_lang_2 = rnn_intersection_run(
+            #    lam, epochs, language_set, lang_1, lang_2, *model_args
+            #)
 
-            rnn_writer.writerow([i+1, lam, loss, percent_correct, epoch, l2, l0, re_loss, loss_lang_1, loss_lang_2,
-                                  rnn_l1_empirical_best, rnn_l2_empirical_best, l1_theoretical_best, l2_theoretical_best,
-                                 rnn_l1_empirical_crossent, rnn_l2_empirical_crossent])
+            #rnn_writer.writerow([i+1, lam, loss, percent_correct, epoch, l2, l0, re_loss, loss_lang_1, loss_lang_2,
+            #                      rnn_l1_empirical_best, rnn_l2_empirical_best, l1_theoretical_best, l2_theoretical_best,
+            #                     rnn_l1_empirical_crossent, rnn_l2_empirical_crossent])
 
-            torch.save(rnn_model, models_dir + "/rnn/models/rnn_{}_{}.pt".format(str(lam), str(i+1)))
+            #torch.save(rnn_model, models_dir + "/rnn/models/rnn_{}_{}.pt".format(str(lam), str(i+1)))
             ####
 
             #vib_model, loss, mi, percent_correct, epoch, loss_lang_1, mi_lang_1, loss_lang_2, mi_lang_2 = vib_intersection_run(
