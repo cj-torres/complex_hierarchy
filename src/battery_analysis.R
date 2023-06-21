@@ -2,7 +2,8 @@ rm(list = ls())
 library(tidyverse)
 
 setwd("C:\\Users\\torre\\PycharmProjects\\complex_hierarchy\\src")
-directory = "..\\data\\Output-2023-05-20"
+directory1 = "..\\data\\Output-2023-05-20"
+directory2 = "..\\data\\Output-2023-06-11"
 
 
 read_loss_files <- function(directory, model_type) {
@@ -138,10 +139,14 @@ trap_under_pareto <- function(data, group, factor, x, y, max_x, max_y, min_x, mi
 }
 
 
-language_folders = list.files(directory, full.names=TRUE)
-languages = list.files(directory, full.names=FALSE)
+language_folders = list.files(directory1, full.names=TRUE)
+languages = list.files(directory1, full.names=FALSE)
+supplemental_folders = list.files(directory2, full.names=TRUE)
+supplemental_languages = list.files(directory2, full.names=FALSE)
 
-lstm_data = read_loss_files(directory, "lstm") %>% mutate(fsa.group = substr(lang,1,1)) %>% mutate(lang.type = substr(lang,2,2)) %>% mutate(kld = test.loss - best)
+lstm_data = read_loss_files(directory1, "lstm") %>% mutate(fsa.group = substr(lang,1,1)) %>% mutate(lang.type = substr(lang,2,2)) %>% mutate(kld = (test.loss - best)/log(2)) %>% filter(lang != "a3" & lang != "a2")
+supplemental_data = read_loss_files(directory2, "lstm") %>% mutate(fsa.group = substr(lang,1,1)) %>% mutate(lang.type = substr(lang,2,2)) %>% mutate(kld = test.loss - best)
+lstm_data = rbind(lstm_data, supplemental_data)
 lstm_data = lstm_data %>% group_by(lam, num, lang) %>% slice(n())
 lstm_groups = lstm_data %>% group_by(fsa.group) %>% group_split()
 
@@ -210,6 +215,64 @@ for(lstm_group in lstm_groups){
 }
 
 
+for(lstm_group in lstm_groups){
+  lstm_group = as.data.frame(lstm_group)
+  languages = unique(lstm_group["lang.type"])
+  min_sl = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "1"))[,"l0"])
+  min_sp = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "2"))[,"l0"])
+  min_reg = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "3"))[,"l0"])
+  sp_sl_diff = min_sp - min_sl
+  reg_sl_diff = min_reg - min_sl
+  reg_sp_diff = min_reg - min_sp
+  
+  print(sp_sl_diff)
+  print(reg_sl_diff)
+  print(reg_sp_diff)
+  
+  sp_sl_diff_bigger <- rep(NA, 1000)
+  sp_sl_df = lstm_group %>% filter(lang.type == "1" | lang.type == "2")
+  for (i in 1:1000){
+    sample = sp_sl_df
+    sampled_lang = sample(sp_sl_df$lang.type)
+    sample$lang.type <- sampled_lang
+    min_sl = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "1"))[,"l0"])
+    min_sp = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "2"))[,"l0"])
+    
+    sp_sl_diff_bigger[i] = abs(min_sp-min_sl) > abs(sp_sl_diff)
+    
+  }
+  print(sum(sp_sl_diff_bigger,na.rm=TRUE) / 1000)
+  
+  reg_sl_diff_bigger <- rep(NA, 1000)
+  reg_sl_df = lstm_group %>% filter(lang.type == "1" | lang.type == "3")
+  for (i in 1:1000){
+    sample = reg_sl_df
+    sampled_lang = sample(reg_sl_df$lang.type)
+    sample$lang.type <- sampled_lang
+    min_sl = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "1"))[,"l0"])
+    min_reg = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "3"))[,"l0"])
+    
+    reg_sl_diff_bigger[i] = abs(min_reg-min_sl) > abs(reg_sl_diff)
+    
+  }
+  print(sum(reg_sl_diff_bigger,na.rm=TRUE) / 1000)
+  
+  reg_sp_diff_bigger <- rep(NA, 1000)
+  reg_sp_df = lstm_group %>% filter(lang.type == "2" | lang.type == "3")
+  for (i in 1:1000){
+    sample = reg_sp_df
+    sampled_lang = sample(reg_sp_df$lang.type)
+    sample$lang.type <- sampled_lang
+    min_sp = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "2"))[,"l0"])
+    min_reg = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "3"))[,"l0"])
+    
+    reg_sp_diff_bigger[i] = abs(min_reg-min_sp) > abs(reg_sp_diff)
+    
+  }
+  print(sum(reg_sp_diff_bigger,na.rm=TRUE) / 1000)
+}
+
+
 
 for(lstm_group in lstm_groups){
   lstm_group = as.data.frame(lstm_group)
@@ -234,10 +297,10 @@ for(lstm_group in lstm_groups){
 }
 plot_lstm = do.call(rbind, plot_data)
 
-plot = ggplot(lstm_data, aes(x=l0, y=kld, color=lang.type, group=lang)) +geom_point() + facet_grid(fsa.group~lang.type, labeller = as_labeller(c("1"="Strictly Local", "2" = "Strictly Piecewise", "3" = "Strictly Regular", 'g'="G","a"="A","b"="B")))+
+plot = ggplot(lstm_data%>% filter(kld<=10e-3), aes(x=l0, y=kld, color=lang.type, group=lang)) +geom_point()+geom_point(data=lstm_data%>%filter(kld>10e-3), color="gray") + facet_grid(fsa.group~lang.type, labeller = as_labeller(c("1"="Strictly Local", "2" = "Strictly Piecewise", "3" = "Regular", 'g'="*ac","a"="*aac","b"="*ab, *ba")))+
   geom_ribbon(data = plot_lstm %>% filter(is.pareto) %>% arrange(lang, l0), aes(fill=lang.type, ymax = kld, ymin=0), alpha=.25)+
-  coord_cartesian(ylim=c(0,.5), xlim=c(min_x,75)) + theme_bw() + scale_color_manual(labels=c("Strictly Local", "Strictly Piecewise", "Strictly Regular"), values=c("#E69F00", "#56B4E9","#D55E00")) + scale_fill_manual(labels=c("Strictly Local", "Strictly Piecewise", "Strictly Regular"), values=c("#E69F00", "#56B4E9","#D55E00"))+
-  xlab("Number of parameters (expected value)")+ylab("Kullback-Liebler Divergence") +labs(color="Language", fill="Language") + theme(text = element_text(size=17),legend.position="none")
+  coord_cartesian(ylim=c(0,.5), xlim=c(min_x,75)) + theme_bw() + scale_color_manual(labels=c("Strictly Local", "Piecewise Testable", "Regular"), values=c("#E69F00", "#56B4E9","#D55E00")) + scale_fill_manual(labels=c("Strictly Local", "Strictly Piecewise", "Strictly Regular"), values=c("#E69F00", "#56B4E9","#D55E00"))+
+  xlab("Number of parameters (expected value)")+ylab("Kullback-Liebler Divergence (bits)") +labs(color="Language", fill="Language") + theme(text = element_text(size=17),legend.position="none")
 print(plot)
 
 eps_data = lstm_data %>% filter(abs(kld)<10e-3)%>%mutate(fsa.group=as.factor(fsa.group))%>%mutate(lang.type=as.factor(lang.type))
@@ -252,7 +315,7 @@ ggplot(eps_data, aes(y=l0, x=lang.type, color=lang.type))+facet_wrap(~fsa.group,
 plot = ggplot(lstm_data, aes(x=l0, y=kld, color=lang.type, group=lang)) +geom_point(color="gray") + facet_grid(fsa.group~lang.type, labeller = as_labeller(c("1"="Strictly Local", "2" = "Strictly Piecewise", "3" = "Strictly Regular", 'g'="G","a"="A","b"="B")))+
   geom_ribbon(data = plot_lstm %>% filter(is.pareto) %>% arrange(lang, l0), aes(fill=lang.type, ymax = kld, ymin=0), alpha=.25)+geom_point(data=lstm_data %>% filter(abs(kld)<10e-3))+
   coord_cartesian(ylim=c(0,.5), xlim=c(min_x,75)) + theme_bw() + scale_color_manual(labels=c("Strictly Local", "Strictly Piecewise", "Strictly Regular"), values=c("#E69F00", "#56B4E9","#D55E00")) + scale_fill_manual(labels=c("Strictly Local", "Strictly Piecewise", "Strictly Regular"), values=c("#E69F00", "#56B4E9","#D55E00"))+
-  xlab("Number of parameters (expected value)")+ylab("Kullback-Liebler Divergence") +labs(color="Language", fill="Language") + theme(text = element_text(size=17),legend.position="none")
+  xlab("Number of parameters (expected value)")+ylab("Kullback-Liebler Divergence (bits)") +labs(color="Language", fill="Language") + theme(text = element_text(size=17),legend.position="none")
 print(plot)
 
 

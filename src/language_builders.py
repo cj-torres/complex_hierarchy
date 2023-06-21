@@ -1092,3 +1092,62 @@ def make_intersection_complement_sets(pfsa_1, pfsa_2, intersection_pfsa, final_n
 
     return intersection_data, lang_1_test, lang_2_test
 
+
+
+### unit tests for PFSAs
+def b1_check(word):
+    import itertools
+    return (2,3) not in itertools.pairwise(word) and (3,2) not in itertools.pairwise(word)
+
+
+def b2_check(word):
+    if 3 in word:
+        return 2 not in word
+    elif 2 in word:
+        return 3 not in word
+    else:
+        return True
+
+
+def b3_check(word):
+    is_odd_a = [sum([char==2 for char in word[0:i]])%2 for i, _ in enumerate(word)]
+    is_a = [char==2 for char in word]
+    is_odd_b = [sum([char == 3 for char in word[0:i]]) % 2 for i, _ in enumerate(word)]
+    is_b = [char==3 for char in word]
+    return all([not (mod_a and c) for mod_a, c in zip(is_odd_a, is_b)]) and all([not(mod_b and c) for mod_b, c in zip(is_odd_b, is_a)])
+
+
+def g1_check(word):
+    import itertools
+    return (2, 4) not in itertools.pairwise(word)
+
+
+def g2_check(word):
+    import itertools
+    return (2, 4) not in itertools.combinations(word, r=2)
+
+
+def g3_check(word):
+    is_odd_a = [sum([char==2 for char in word[0:i]])%2 for i, _ in enumerate(word)]
+    is_c = [char == 4 for char in word]
+    return all([not (mod_a and c) for mod_a, c in zip(is_odd_a, is_c)])
+
+
+def a1_check(word):
+    def get_subtuples(iterable, k):
+        return [iterable[i:i + k] for i in range(len(iterable) - k + 1)]
+    return (2,2,4) not in get_subtuples(word, 3)
+
+
+def a2_check(word):
+    import itertools
+    return (2,2,4) not in itertools.combinations(word, r=3)
+
+
+def a3_check(word):
+    is_throdd_a = [(sum([char == 2 for char in word[0:i]]) % 3)==2 for i, _ in enumerate(word)]
+    is_c = [char == 4 for char in word]
+    return all([not (mod_a and c) for mod_a, c in zip(is_throdd_a, is_c)])
+
+
+

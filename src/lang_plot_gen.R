@@ -119,13 +119,13 @@ plot_lstm = add_pareto(lstm_data, "lang", "l0", "loss", max_x, max_y) %>% mutate
 
 ggplot(plot_lstm, aes(x=l0, y=loss)) + geom_point() + facet_wrap(~lang)
 
-ggplot(lstm_data, aes(x=l0, y=loss, color=lang, group=lang)) +geom_point() + facet_wrap(~lang)+
+ggplot(lstm_data, aes(x=l0, y=loss, color=lang, group=lang)) +geom_point() + facet_grid(~lang)+
   geom_rect(data = plot_lstm %>% filter(is.pareto) %>% arrange(lang, l0), aes(fill=lang, ymax = loss, ymin=0, xmin = l0, xmax = lead(l0)), alpha=.25, color=NA)+
   geom_step(data=plot_lstm%>% filter(is.pareto)) + coord_cartesian(ylim=c(0,.7), xlim=c(0,150)) + theme_bw()
 
 
-ggplot(lstm_data, aes(x=l0, y=loss, color=lang, group=lang)) +geom_point(color="gray") + facet_grid(.~lang, labeller = as_labeller(c("sh" = "Standard Harmony", "fl"="First-Last")))+
+ggplot(lstm_data, aes(x=l0, y=loss, color=lang, group=lang)) +geom_point(color="gray") + facet_grid(lang~., labeller = as_labeller(c("sh" = "Standard Harmony", "fl"="First-Last")))+
   geom_ribbon(data = plot_lstm %>% filter(is.pareto) %>% arrange(lang, l0), aes(fill=lang, ymax = loss, ymin=0), alpha=.25)+geom_point(data=lstm_data %>% filter(abs(loss)<10e-3))+
   coord_cartesian(ylim=c(0,max_y), xlim=c(min_x,75)) + theme_bw() + xlab("Number of parameters (expected value)") + ylab("Average Bernoulli loss (per character)") + 
   scale_color_manual(labels=c("First-Last", "Standard Harmony"), values = c("#56B4E9","#D55E00")) + scale_fill_manual(labels=c("First-Last", "Standard Harmony"), values =  c("#56B4E9","#D55E00"))+labs(color="Language", fill="Language") +
-  theme(text = element_text(size=17))+theme(legend.position="none")
+  theme(text = element_text(size=12))+theme(legend.position="none")
