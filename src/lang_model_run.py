@@ -67,7 +67,7 @@ def intersection_run(num, lambdas, epochs, language_union_gen, lang_1_gen, lang_
     for j, lam in enumerate(lambdas):
         for i in range(num):
             language_set, lang_1, lang_2 = lb.make_intersection_complement_sets(lang_1_gen, lang_2_gen,
-                                                                language_union_gen, 500, **lang_args)
+                                                                language_union_gen, 200, **lang_args)
             #lang_1 = lb.make_pfsa_sets(lang_1_gen, **lang_args)
             #lang_2 = lb.make_pfsa_sets(lang_2_gen, **lang_args)
 
@@ -501,10 +501,10 @@ names = ["b1", "b2", "b3", "g1", "g2", "g3", "a1", "a2", "a3"]
 
 
 intersection_run(N, lambdas, epochs, lb.g13_pfsa, lb.g1_pfsa, lb.g3_pfsa,
-                 *(5, 3, 5, 5), **{"n": 1000, "reject_threshold": 200, "split_p": .795})
+                 *(5, 3, 5, 5), **{"n": 2000, "reject_threshold": 200, "split_p": .795})
 
-language_runs(N, lambdas, epochs, languages, names,
-              *(5, 3, 5, 5), **{"n": 2000, "reject_threshold": 200, "split_p": .795})
+#language_runs(N, lambdas, epochs, languages, names,
+#              *(5, 3, 5, 5), **{"n": 2000, "reject_threshold": 200, "split_p": .795})
 
 
 
