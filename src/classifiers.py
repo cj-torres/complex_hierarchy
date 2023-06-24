@@ -91,7 +91,7 @@ class LSTMBranchSequencer(torch.nn.Module):
         final = self.final_transform(self.final_layer(seq))
         y_hat = self.out_f(self.out(final))
 
-        return y_hat.squeeze()
+        return y_hat #.squeeze()
 
 
 class RNNBranchSequencer(torch.nn.Module):

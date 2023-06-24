@@ -184,16 +184,16 @@ if __name__ == '__main__':
     if not os.path.isdir(models_dir_lstm):
         os.mkdir(models_dir_lstm)
 
-    epochs = 200
+    epochs = 400
 
     regularized_branch(N, "{}/fl_small_lstm".format(models_dir_lstm), "{}/fl_small_lstm".format(new_dir),
                        lb.make_fl_branch_sets, lambdas,
                        epochs,
-                       *(5, 3, 5, 5), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+                       *(5, 3, 5, 5), **{"N": 2000, "p": .05, "reject_threshold": 200, "split_p": .795})
     regularized_branch(N, "{}/sh_small_lstm".format(models_dir_lstm), "{}/sh_small_lstm".format(new_dir),
                        lb.make_sh_branch_sets, lambdas,
                        epochs,
-                       *(5, 3, 5, 5), **{"N": 1000, "p": .05, "reject_threshold": 200, "split_p": .795})
+                       *(5, 3, 5, 5), **{"N": 2000, "p": .05, "reject_threshold": 200, "split_p": .795})
 
     #rnn_regularized_branch(N, "{}/fl_small_rnn".format(models_dir_rnn), "{}/fl_small_rnn".format(new_dir), lb.make_fl_branch_sets, lambdas,
     #                   epochs,

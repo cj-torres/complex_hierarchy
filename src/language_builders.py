@@ -1078,8 +1078,8 @@ def make_intersection_complement_sets(pfsa_1, pfsa_2, intersection_pfsa, final_n
         lang_2 = pfsa_2.n_samples(n)
         intersection = intersection_pfsa.n_samples(n)
 
-        lang1_complement = [word for word in lang_1 if word not in intersection]
-        lang2_complement = [word for word in lang_2 if word not in intersection]
+        lang1_complement = [word for word in lang_1 if word[0] not in [i[0] for i in intersection]]
+        lang2_complement = [word for word in lang_2 if word[0] not in [i[0] for i in intersection]]
 
         if len(lang2_complement) > final_n and len(lang1_complement) > final_n:
             satisfied = True
