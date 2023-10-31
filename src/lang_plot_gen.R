@@ -1,7 +1,7 @@
 rm(list = ls())
 library(tidyverse)
 
-setwd("C:\\Users\\torre\\PycharmProjects\\complex_hierarchy\\src")
+setwd("F:\\PycharmProjects\\complex_hierarchy\\src")
 fl_lstm_data = read.csv("..\\data\\Output-2023-05-19\\fl_small_lstm_loss.csv") %>% mutate(lang = "fl")
 sh_lstm_data = read.csv("..\\data\\Output-2023-05-19\\sh_small_lstm_loss.csv") %>% mutate(lang = "sh")
 
@@ -112,6 +112,25 @@ for (i in 1:1000){
   if(i %% 100 == 0){print(sum(area_diff_bigger,na.rm=TRUE) / i)}
   
 }
+
+min_fl <- min((lstm_data %>% filter(loss<=10e-3 & lang == "fl"))[,"l0"])
+min_sh <- min((lstm_data %>% filter(loss<=10e-3 & lang == "sh"))[,"l0"])
+
+min_diff = min_fl - min_sh
+min_diff_bigger <- rep(NA, 1000)
+for (i in 1:1000){
+  sample_harmony = lstm_data
+  sampled_lang = sample(lstm_data$lang)
+  sample_harmony$lang <- sampled_lang
+  min_sh <- min((sample_harmony %>% filter(loss<=10e-3 & lang == "sh"))[,"l0"])
+  
+  min_fl <- min((sample_harmony %>% filter(loss<=10e-3 & lang == "sh"))[,"l0"])
+  
+  min_diff_bigger[i] = min_fl-min_sh > min_diff
+  if(i %% 100 == 0){print(sum(min_diff_bigger,na.rm=TRUE) / i)}
+  
+}
+
 
 print(sum(area_diff_bigger,na.rm=TRUE) / 1000)
 

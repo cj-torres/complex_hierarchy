@@ -1,7 +1,7 @@
 rm(list = ls())
 library(tidyverse)
 
-setwd("C:\\Users\\torre\\PycharmProjects\\complex_hierarchy\\src")
+setwd("F:\\PycharmProjects\\complex_hierarchy\\src")
 directory1 = "..\\data\\Output-2023-05-20"
 directory2 = "..\\data\\Output-2023-06-11"
 
@@ -145,7 +145,7 @@ supplemental_folders = list.files(directory2, full.names=TRUE)
 supplemental_languages = list.files(directory2, full.names=FALSE)
 
 lstm_data = read_loss_files(directory1, "lstm") %>% mutate(fsa.group = substr(lang,1,1)) %>% mutate(lang.type = substr(lang,2,2)) %>% mutate(kld = (test.loss - best)/log(2)) %>% filter(lang != "a3" & lang != "a2")
-supplemental_data = read_loss_files(directory2, "lstm") %>% mutate(fsa.group = substr(lang,1,1)) %>% mutate(lang.type = substr(lang,2,2)) %>% mutate(kld = test.loss - best)
+supplemental_data = read_loss_files(directory2, "lstm") %>% mutate(fsa.group = substr(lang,1,1)) %>% mutate(lang.type = substr(lang,2,2)) %>% mutate(kld = (test.loss - best)/log(2))
 lstm_data = rbind(lstm_data, supplemental_data)
 lstm_data = lstm_data %>% group_by(lam, num, lang) %>% slice(n())
 lstm_groups = lstm_data %>% group_by(fsa.group) %>% group_split()
@@ -235,8 +235,8 @@ for(lstm_group in lstm_groups){
     sample = sp_sl_df
     sampled_lang = sample(sp_sl_df$lang.type)
     sample$lang.type <- sampled_lang
-    min_sl = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "1"))[,"l0"])
-    min_sp = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "2"))[,"l0"])
+    min_sl = min((sample %>% filter(kld<=10e-3 & lang.type == "1"))[,"l0"])
+    min_sp = min((sample %>% filter(kld<=10e-3 & lang.type == "2"))[,"l0"])
     
     sp_sl_diff_bigger[i] = abs(min_sp-min_sl) > abs(sp_sl_diff)
     
@@ -249,8 +249,8 @@ for(lstm_group in lstm_groups){
     sample = reg_sl_df
     sampled_lang = sample(reg_sl_df$lang.type)
     sample$lang.type <- sampled_lang
-    min_sl = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "1"))[,"l0"])
-    min_reg = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "3"))[,"l0"])
+    min_sl = min((sample %>% filter(kld<=10e-3 & lang.type == "1"))[,"l0"])
+    min_reg = min((sample %>% filter(kld<=10e-3 & lang.type == "3"))[,"l0"])
     
     reg_sl_diff_bigger[i] = abs(min_reg-min_sl) > abs(reg_sl_diff)
     
@@ -263,8 +263,8 @@ for(lstm_group in lstm_groups){
     sample = reg_sp_df
     sampled_lang = sample(reg_sp_df$lang.type)
     sample$lang.type <- sampled_lang
-    min_sp = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "2"))[,"l0"])
-    min_reg = min((lstm_group %>% filter(kld<=10e-3 & lang.type == "3"))[,"l0"])
+    min_sp = min((sample %>% filter(kld<=10e-3 & lang.type == "2"))[,"l0"])
+    min_reg = min((sample %>% filter(kld<=10e-3 & lang.type == "3"))[,"l0"])
     
     reg_sp_diff_bigger[i] = abs(min_reg-min_sp) > abs(reg_sp_diff)
     
